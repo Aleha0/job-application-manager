@@ -29,7 +29,19 @@ const State = {
   folders: [],
   settings: {},
   currentFolder: 'all',     // 'all' | 'none' | folderId
+  filterStatut: '',         // '' = tous, sinon un statut
   view: 'dashboard',
+};
+
+// Classe CSS courte pour les pastilles de filtre (sans accents/espaces).
+const STATUT_CHIP_CLASS = {
+  'À postuler': 'c-apostuler',
+  'Envoyée': 'c-envoyee',
+  'Relancée': 'c-relancee',
+  'Entretien': 'c-entretien',
+  'Acceptée': 'c-acceptee',
+  'Refusée': 'c-refusee',
+  'Sans réponse': 'c-sansreponse',
 };
 
 const STATUT_CLASS = {
@@ -78,6 +90,21 @@ function fmtSize(bytes) {
 function statutBadge(statut) {
   const cls = STATUT_CLASS[statut] || 's-apostuler';
   return `<span class="badge ${cls}">${esc(statut)}</span>`;
+}
+
+// Date du jour (locale) au format YYYY-MM-DD, pour les champs <input type="date">.
+function todayLocalISO() {
+  const d = new Date();
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
+
+// Ajoute un nombre de jours à une date ISO (YYYY-MM-DD) et renvoie une date ISO.
+function addDaysISO(iso, days) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 }
 
 function toast(msg, type = 'ok') {
@@ -143,7 +170,6 @@ async function loadAll() {
   State.candidatures = candidatures;
   State.folders = folders;
   State.settings = settings;
-  fillStatutFilter();
 }
 
 async function refreshCandidatures() {
@@ -232,16 +258,34 @@ async function renderDashboard() {
 /* ===================================================================== */
 /*  Vue : Candidatures                                                  */
 /* ===================================================================== */
-function fillStatutFilter() {
-  const sel = $('#filterStatut');
-  sel.innerHTML =
-    '<option value="">Tous les statuts</option>' +
-    State.statuts.map((s) => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+// Construit les pastilles de filtre par statut, avec le nombre par statut.
+function renderStatutChips() {
+  const box = $('#statutChips');
+  if (!box) return;
+  // Compte des candidatures par statut.
+  const counts = {};
+  for (const c of State.candidatures) counts[c.statut] = (counts[c.statut] || 0) + 1;
+
+  const chip = (value, label, cssClass, count) => {
+    const active = State.filterStatut === value;
+    const dot = value ? `<span class="chip-dot"></span>` : '';
+    return `
+      <button class="chip ${cssClass} ${active ? 'active' : ''}" data-statut-chip="${esc(value)}">
+        ${dot}${esc(label)}
+        <span class="chip-count">${count}</span>
+      </button>`;
+  };
+
+  let html = chip('', 'Toutes', 'c-all', State.candidatures.length);
+  html += State.statuts
+    .map((s) => chip(s, s, STATUT_CHIP_CLASS[s] || '', counts[s] || 0))
+    .join('');
+  box.innerHTML = html;
 }
 
 function getFilteredCandidatures() {
   const q = ($('#searchCandidatures')?.value || '').toLowerCase().trim();
-  const statut = $('#filterStatut')?.value || '';
+  const statut = State.filterStatut;
   return State.candidatures.filter((c) => {
     if (statut && c.statut !== statut) return false;
     if (q) {
@@ -253,10 +297,30 @@ function getFilteredCandidatures() {
 }
 
 function renderCandidatures() {
+  renderStatutChips();
+
+  // Bouton "effacer" de la recherche.
+  const q = $('#searchCandidatures')?.value || '';
+  $('#searchClear')?.classList.toggle('hidden', q.length === 0);
+
   const list = getFilteredCandidatures();
+
+  // Compteur de résultats.
+  const total = State.candidatures.length;
+  const countEl = $('#resultCount');
+  if (countEl) {
+    if (!total) {
+      countEl.textContent = '';
+    } else if (list.length === total) {
+      countEl.textContent = `${total} candidature${total > 1 ? 's' : ''}`;
+    } else {
+      countEl.textContent = `${list.length} résultat${list.length > 1 ? 's' : ''} sur ${total}`;
+    }
+  }
+
   $('#candidaturesTable').innerHTML = list.length
     ? candidaturesTableHTML(list, false)
-    : emptyState('🔍', 'Aucun résultat', 'Aucune candidature ne correspond à ta recherche.');
+    : emptyState('🔍', 'Aucun résultat', 'Aucune candidature ne correspond à ta recherche ou à ce filtre.');
 }
 
 function candidaturesTableHTML(list, compact) {
@@ -320,6 +384,16 @@ function emptyState(ico, title, sub) {
 function candidatureModal(c = null) {
   const isEdit = !!c;
   c = c || {};
+
+  // Valeurs par défaut des dates pour une NOUVELLE candidature :
+  //  - date de candidature  -> aujourd'hui
+  //  - date de relance      -> aujourd'hui + délai configuré (7 j par défaut)
+  // En modification, on conserve les dates existantes.
+  const delai = parseInt(State.settings.relance_delai_jours || '7', 10);
+  const today = todayLocalISO();
+  const valDateCand = isEdit ? (c.date_candidature || '').slice(0, 10) : today;
+  const valDateRelance = isEdit ? (c.date_relance || '').slice(0, 10) : addDaysISO(today, delai);
+
   const statutOptions = State.statuts
     .map((s) => `<option value="${esc(s)}" ${c.statut === s ? 'selected' : ''}>${esc(s)}</option>`)
     .join('');
@@ -354,11 +428,11 @@ function candidatureModal(c = null) {
           </div>
           <div class="field">
             <label>Date de candidature</label>
-            <input class="input" type="date" name="date_candidature" value="${esc((c.date_candidature || '').slice(0, 10))}" />
+            <input class="input" type="date" name="date_candidature" value="${esc(valDateCand)}" />
           </div>
           <div class="field">
-            <label>Date de relance <span class="hint">(manuelle, optionnelle)</span></label>
-            <input class="input" type="date" name="date_relance" value="${esc((c.date_relance || '').slice(0, 10))}" />
+            <label>Date de relance <span class="hint">(pré-remplie, modifiable)</span></label>
+            <input class="input" type="date" name="date_relance" value="${esc(valDateRelance)}" />
           </div>
           <div class="field">
             <label>Type de contrat</label>
@@ -854,6 +928,23 @@ async function afterChange() {
 /*  Délégation d'événements (clics)                                    */
 /* ===================================================================== */
 document.addEventListener('click', async (e) => {
+  // Bouton "effacer" de la recherche
+  if (e.target.closest('#searchClear')) {
+    const input = $('#searchCandidatures');
+    if (input) input.value = '';
+    renderCandidatures();
+    input?.focus();
+    return;
+  }
+
+  // Pastille de filtre par statut
+  const chipBtn = e.target.closest('[data-statut-chip]');
+  if (chipBtn) {
+    State.filterStatut = chipBtn.dataset.statutChip;
+    renderCandidatures();
+    return;
+  }
+
   const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit]');
   if (!t) return;
 
@@ -953,9 +1044,6 @@ document.addEventListener('click', async (e) => {
 // Recherche & filtres
 document.addEventListener('input', (e) => {
   if (e.target.id === 'searchCandidatures') renderCandidatures();
-});
-document.addEventListener('change', (e) => {
-  if (e.target.id === 'filterStatut') renderCandidatures();
 });
 
 /* ===================================================================== */

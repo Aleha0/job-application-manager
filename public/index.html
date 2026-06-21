@@ -79,19 +79,23 @@
           </button>
         </header>
 
-        <div class="toolbar">
-          <input
-            type="search"
-            id="searchCandidatures"
-            class="input"
-            placeholder="🔍 Rechercher (entreprise, poste, lieu...)"
-          />
-          <select id="filterStatut" class="input">
-            <option value="">Tous les statuts</option>
-          </select>
+        <div class="filter-bar">
+          <div class="filter-search">
+            <span class="filter-search-ico">🔍</span>
+            <input
+              type="search"
+              id="searchCandidatures"
+              placeholder="Rechercher une entreprise, un poste, un lieu, un recruteur..."
+            />
+            <button class="filter-search-clear hidden" id="searchClear" title="Effacer">✕</button>
+          </div>
+          <div class="filter-chips" id="statutChips"></div>
         </div>
 
         <div class="card">
+          <div class="card-head card-head-sub">
+            <span id="resultCount" class="muted"></span>
+          </div>
           <div id="candidaturesTable"></div>
         </div>
       </section>
