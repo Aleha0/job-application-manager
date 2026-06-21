@@ -290,6 +290,61 @@ app.get(
   })
 );
 
+// Données agrégées pour la vue Statistiques (graphiques).
+function lastNMonths(n) {
+  const out = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+app.get(
+  '/api/stats/charts',
+  asyncRoute((req, res) => {
+    const rows = db.prepare('SELECT statut, date_candidature, plateforme FROM candidatures').all();
+    const total = rows.length;
+
+    const parStatut = {};
+    for (const s of STATUTS) parStatut[s] = 0;
+    const platMap = {};
+    const moisMap = {};
+    for (const r of rows) {
+      parStatut[r.statut] = (parStatut[r.statut] || 0) + 1;
+      if (r.plateforme) platMap[r.plateforme] = (platMap[r.plateforme] || 0) + 1;
+      const m = (r.date_candidature || '').slice(0, 7);
+      if (m) moisMap[m] = (moisMap[m] || 0) + 1;
+    }
+
+    const mois = lastNMonths(12).map((m) => ({ mois: m, count: moisMap[m] || 0 }));
+    const parPlateforme = Object.entries(platMap)
+      .map(([nom, count]) => ({ nom, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const g = (s) => parStatut[s] || 0;
+    const envoyees = total - g('À postuler');
+    const entretiens = g('Entretien') + g('Acceptée');
+    const acceptees = g('Acceptée');
+    const reponses = g('Entretien') + g('Acceptée') + g('Refusée') + g('En réserve');
+    const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+    res.json({
+      total,
+      parStatut,
+      mois,
+      parPlateforme,
+      funnel: { envoyees, entretiens, acceptees },
+      taux: {
+        reponse: pct(reponses, envoyees),
+        entretien: pct(entretiens, envoyees),
+        acceptation: pct(acceptees, envoyees),
+      },
+    });
+  })
+);
+
 // =========================================================================
 //  API : RECHERCHE GLOBALE
 // =========================================================================

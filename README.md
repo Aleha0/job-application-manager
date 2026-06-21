@@ -19,6 +19,9 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Notes texte** : crée des fichiers texte pour consigner des informations, et
   rattache-les à une candidature ou à un dossier.
 - **Tableau de bord** avec statistiques.
+- **Statistiques & graphiques** 📈 : chiffres clés (taux de réponse, d'entretien),
+  candidatures par mois, répartition par statut, entonnoir de conversion et
+  répartition par plateforme — graphiques 100 % locaux (sans librairie externe).
 - **Recherche globale** 🔍 : cherche en une fois dans les candidatures, documents et
   notes (étiquettes incluses, insensible aux accents). Accès via le bouton de la
   barre latérale ou le raccourci **Ctrl+K**.

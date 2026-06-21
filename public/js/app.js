@@ -298,6 +298,7 @@ function switchView(view) {
   if (view === 'dashboard') renderDashboard();
   if (view === 'settings') renderSettings();
   if (view === 'cvtheques') renderCvtheques();
+  if (view === 'stats') renderStats();
 }
 
 /* ===================================================================== */
@@ -398,6 +399,129 @@ async function renderDashboard() {
   $('#dashboardTable').innerHTML = recent.length
     ? candidaturesTableHTML(recent, true)
     : emptyState('📋', 'Aucune candidature', 'Clique sur « Nouvelle candidature » pour commencer.');
+}
+
+/* ===================================================================== */
+/*  Vue : Statistiques                                                  */
+/* ===================================================================== */
+const STATUT_COLORVAR = {
+  'À postuler': '--gray',
+  'Envoyée': '--blue',
+  'Relancée': '--purple',
+  'Entretien': '--amber',
+  'Acceptée': '--green',
+  'Refusée': '--red',
+  'En réserve': '--teal',
+  'Sans réponse': '--gray',
+};
+
+const MOIS_COURTS = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+function moisLabel(ym) {
+  const m = parseInt((ym || '').slice(5, 7), 10);
+  return MOIS_COURTS[m - 1] || '';
+}
+
+// Barre horizontale (label + barre colorée + valeur).
+function hbar(label, value, max, colorVar) {
+  const w = max > 0 ? Math.round((value / max) * 100) : 0;
+  return `
+    <div class="hbar-row">
+      <div class="hbar-lbl">${esc(label)}</div>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:var(${colorVar})"></div></div>
+      <div class="hbar-val">${value}</div>
+    </div>`;
+}
+
+async function renderStats() {
+  const box = $('#statsContent');
+  if (!box) return;
+  box.innerHTML = '<span class="muted">Chargement…</span>';
+  let d;
+  try {
+    d = await api('/api/stats/charts');
+  } catch (err) {
+    box.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    return;
+  }
+  if (!d.total) {
+    box.innerHTML = emptyState('📈', 'Pas encore de données', 'Ajoute des candidatures pour voir tes statistiques.');
+    return;
+  }
+
+  // Chiffres clés
+  const cards = [
+    { label: 'Candidatures', value: d.total, accent: true },
+    { label: 'Envoyées', value: d.funnel.envoyees },
+    { label: 'Entretiens', value: d.funnel.entretiens },
+    { label: 'Taux de réponse', value: d.taux.reponse + ' %' },
+    { label: "Taux d'entretien", value: d.taux.entretien + ' %' },
+  ];
+  const cardsHtml = cards
+    .map((c) => `<div class="stat ${c.accent ? 'accent' : ''}"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`)
+    .join('');
+
+  // Candidatures par mois (barres verticales)
+  const maxMois = Math.max(1, ...d.mois.map((m) => m.count));
+  const moisHtml = d.mois
+    .map((m) => {
+      const h = Math.round((m.count / maxMois) * 100);
+      return `
+        <div class="vbar-col" title="${m.mois} : ${m.count}">
+          <div class="vbar-wrap"><div class="vbar" style="height:${h}%"></div></div>
+          <div class="vbar-val">${m.count || ''}</div>
+          <div class="vbar-lbl">${moisLabel(m.mois)}</div>
+        </div>`;
+    })
+    .join('');
+
+  // Répartition par statut (barres horizontales colorées)
+  const statutEntries = State.statuts.map((s) => [s, d.parStatut[s] || 0]).filter(([, n]) => n > 0);
+  const maxStatut = Math.max(1, ...statutEntries.map(([, n]) => n));
+  const statutHtml = statutEntries.length
+    ? statutEntries.map(([s, n]) => hbar(s, n, maxStatut, STATUT_COLORVAR[s] || '--gray')).join('')
+    : '<span class="muted">—</span>';
+
+  // Entonnoir de conversion
+  const f = d.funnel;
+  const funnelMax = Math.max(1, f.envoyees);
+  const funnelHtml =
+    hbar('Envoyées', f.envoyees, funnelMax, '--blue') +
+    hbar('Entretiens', f.entretiens, funnelMax, '--amber') +
+    hbar('Acceptées', f.acceptees, funnelMax, '--green');
+
+  // Par plateforme
+  const maxPlat = Math.max(1, ...d.parPlateforme.map((p) => p.count));
+  const platHtml = d.parPlateforme.length
+    ? d.parPlateforme.map((p) => hbar(p.nom, p.count, maxPlat, '--primary')).join('')
+    : '<span class="muted">Aucune plateforme renseignée sur tes candidatures.</span>';
+
+  box.innerHTML = `
+    <div class="stat-grid">${cardsHtml}</div>
+
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-head"><h2>Candidatures par mois</h2></div>
+        <div class="card-body"><div class="vbars">${moisHtml}</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Entonnoir de conversion</h2></div>
+        <div class="card-body">
+          ${funnelHtml}
+          <p class="muted" style="margin-top:10px">Taux d'acceptation : ${d.taux.acceptation} % des candidatures envoyées.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Répartition par statut</h2></div>
+        <div class="card-body">${statutHtml}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Par plateforme</h2></div>
+        <div class="card-body">${platHtml}</div>
+      </div>
+    </div>`;
 }
 
 /* ===================================================================== */

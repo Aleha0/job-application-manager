@@ -38,6 +38,9 @@
         <button class="nav-item active" data-view="dashboard">
           <span class="nav-ico">📊</span> Tableau de bord
         </button>
+        <button class="nav-item" data-view="stats">
+          <span class="nav-ico">📈</span> Statistiques
+        </button>
         <button class="nav-item" data-view="candidatures">
           <span class="nav-ico">📋</span> Candidatures
         </button>
@@ -86,6 +89,17 @@
           </div>
           <div id="dashboardTable"></div>
         </div>
+      </section>
+
+      <!-- Vue : Statistiques -->
+      <section class="view hidden" id="view-stats">
+        <header class="view-header">
+          <div>
+            <h1>Statistiques</h1>
+            <p class="muted">Tes candidatures en chiffres et en graphiques</p>
+          </div>
+        </header>
+        <div id="statsContent"></div>
       </section>
 
       <!-- Vue : Candidatures -->

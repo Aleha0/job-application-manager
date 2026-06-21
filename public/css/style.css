@@ -327,6 +327,30 @@ a { color: var(--primary); }
 .stat-label { color: var(--muted); font-size: 0.82rem; font-weight: 500; margin-top: 2px; }
 .stat.accent .stat-value { color: var(--primary); }
 
+/* ---- Graphiques (Statistiques) ---- */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 22px;
+}
+.card-body { padding: 18px 20px; }
+
+/* Barres horizontales */
+.hbar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.hbar-row:last-child { margin-bottom: 0; }
+.hbar-lbl { width: 110px; flex-shrink: 0; font-size: 0.82rem; color: var(--text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-track { flex: 1; height: 12px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 999px; min-width: 2px; transition: width 0.3s; }
+.hbar-val { width: 30px; flex-shrink: 0; text-align: right; font-weight: 600; font-size: 0.85rem; }
+
+/* Barres verticales (par mois) */
+.vbars { display: flex; align-items: flex-end; gap: 6px; height: 180px; }
+.vbar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.vbar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.vbar { width: 70%; max-width: 34px; background: var(--primary); border-radius: 5px 5px 0 0; min-height: 2px; transition: height 0.3s; }
+.vbar-val { font-size: 0.72rem; font-weight: 600; color: var(--text-soft); height: 14px; }
+.vbar-lbl { font-size: 0.7rem; color: var(--muted); margin-top: 3px; }
+
 /* ===================================================================== */
 /*  Tableaux                                                             */
 /* ===================================================================== */
