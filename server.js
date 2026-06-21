@@ -260,18 +260,51 @@ app.delete(
   '/api/candidatures/:id',
   asyncRoute((req, res) => {
     const id = Number(req.params.id);
-    // Supprimer aussi les fichiers physiques liés.
-    const docs = db
-      .prepare('SELECT stored_name FROM documents WHERE candidature_id = ?')
-      .all(id);
-    db.prepare('DELETE FROM candidatures WHERE id = ?').run(id);
-    for (const d of docs) {
-      const p = path.join(UPLOAD_DIR, d.stored_name);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
+    let conserves = 0;
+    let supprimes = 0;
+
+    // Documents liés à la candidature : ceux attachés (candidature_id) ET le
+    // « CV envoyé » (cv_document_id). On supprime un document sauf s'il sert
+    // ailleurs : attaché à une AUTRE candidature, « CV envoyé » d'une autre
+    // candidature, ou présent dans une CVthèque. (Le dossier n'empêche pas la
+    // suppression : un CV utilisé pour une seule candidature est bien supprimé.)
+    const cand = db.prepare('SELECT cv_document_id FROM candidatures WHERE id = ?').get(id);
+    const docIds = new Set();
+    for (const d of db.prepare('SELECT id FROM documents WHERE candidature_id = ?').all(id)) docIds.add(d.id);
+    if (cand && cand.cv_document_id) docIds.add(cand.cv_document_id);
+
+    for (const docId of docIds) {
+      const d = db.prepare('SELECT * FROM documents WHERE id = ?').get(docId);
+      if (!d) continue;
+      const ailleurs =
+        (d.candidature_id != null && d.candidature_id !== id) ||
+        db.prepare('SELECT 1 FROM cvtheque_cvs WHERE document_id = ?').get(docId) ||
+        db.prepare('SELECT 1 FROM candidatures WHERE cv_document_id = ? AND id != ?').get(docId, id);
+      if (ailleurs) {
+        if (d.candidature_id === id) db.prepare('UPDATE documents SET candidature_id = NULL WHERE id = ?').run(docId);
+        conserves++;
+      } else {
+        const p = path.join(UPLOAD_DIR, d.stored_name);
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+        db.prepare('DELETE FROM documents WHERE id = ?').run(docId);
+        supprimes++;
+      }
     }
-    db.prepare('DELETE FROM documents WHERE candidature_id = ?').run(id);
-    db.prepare('DELETE FROM notes WHERE candidature_id = ?').run(id);
-    res.json({ ok: true });
+
+    // Notes liées : conservées si elles sont aussi rangées dans un dossier.
+    const notes = db.prepare('SELECT * FROM notes WHERE candidature_id = ?').all(id);
+    for (const n of notes) {
+      if (n.folder_id != null) {
+        db.prepare('UPDATE notes SET candidature_id = NULL WHERE id = ?').run(n.id);
+        conserves++;
+      } else {
+        db.prepare('DELETE FROM notes WHERE id = ?').run(n.id);
+        supprimes++;
+      }
+    }
+
+    db.prepare('DELETE FROM candidatures WHERE id = ?').run(id);
+    res.json({ ok: true, conserves, supprimes });
   })
 );
 

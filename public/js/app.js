@@ -295,6 +295,40 @@ function closeModal() {
 function escClose(e) { if (e.key === 'Escape') closeModal(); }
 window.closeModal = closeModal;
 
+// Modale de confirmation stylée. Renvoie une Promise<boolean>.
+function confirmDialog(opts = {}) {
+  const {
+    title = 'Confirmer la suppression',
+    message = '',
+    confirmLabel = 'Supprimer',
+    danger = true,
+  } = opts;
+  return new Promise((resolve) => {
+    const overlay = openModal(`
+      <div class="modal-head">
+        <h2>${esc(title)}</h2>
+        <button class="btn-icon" data-confirm="0">✕</button>
+      </div>
+      <div class="modal-body"><p style="margin:0; line-height:1.6">${message}</p></div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-confirm="0">Annuler</button>
+        <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-confirm="1">${esc(confirmLabel)}</button>
+      </div>
+    `);
+    let done = false;
+    const finish = (val) => { if (done) return; done = true; closeModal(); resolve(val); };
+    overlay.querySelectorAll('[data-confirm]').forEach((b) =>
+      b.addEventListener('click', () => finish(b.dataset.confirm === '1'))
+    );
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) finish(false); });
+    document.addEventListener('keydown', function escConfirm(e) {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', escConfirm); finish(false); }
+    });
+    const confirmBtn = overlay.querySelector('[data-confirm="1"]');
+    confirmBtn?.focus();
+  });
+}
+
 /* ===================================================================== */
 /*  Navigation                                                           */
 /* ===================================================================== */
@@ -735,7 +769,7 @@ function candidaturesTableHTML(list, compact) {
           <td>${fmtDate(c.date_candidature)}</td>
           <td>${relance}</td>
           <td>
-            <div class="row-actions" onclick="event.stopPropagation()">
+            <div class="row-actions">
               <button class="btn-icon" title="Modifier" data-open-candidature="${c.id}">✏️</button>
               <button class="btn-icon" title="Supprimer" data-del-candidature="${c.id}">🗑️</button>
             </div>
@@ -1988,6 +2022,7 @@ async function addTagFromInput() {
 }
 
 async function removeTag(name) {
+  if (!(await confirmDialog({ title: "Supprimer l'étiquette", message: `Supprimer l'étiquette <strong>${esc(name)}</strong> de la liste ?` }))) return;
   const defs = getTagDefs().filter((d) => d.name !== name);
   try {
     await saveTagsList(defs);
@@ -2056,6 +2091,7 @@ async function addPlatFromInput() {
 }
 
 async function removePlat(name) {
+  if (!(await confirmDialog({ title: 'Supprimer la plateforme', message: `Supprimer la plateforme <strong>${esc(name)}</strong> de la liste ?` }))) return;
   try {
     await savePlateformes(getPlateformes().filter((p) => p !== name));
     toast('Plateforme supprimée');
@@ -2108,6 +2144,7 @@ async function addDomFromInput() {
 }
 
 async function removeDom(name) {
+  if (!(await confirmDialog({ title: 'Supprimer le domaine', message: `Supprimer le domaine <strong>${esc(name)}</strong> de la liste ? (les candidatures gardent leur valeur actuelle)` }))) return;
   try {
     await saveDomaines(getDomaines().filter((dm) => dm !== name));
     toast('Domaine supprimé');
@@ -2301,9 +2338,12 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.delCandidature) {
     const id = Number(t.dataset.delCandidature);
     const c = State.candidatures.find((x) => x.id === id);
-    if (confirm(`Supprimer la candidature « ${c ? c.entreprise : ''} » et ses documents/notes liés ?`)) {
-      await api(`/api/candidatures/${id}`, { method: 'DELETE' });
-      toast('Candidature supprimée');
+    if (await confirmDialog({
+      title: 'Supprimer la candidature',
+      message: `Supprimer la candidature <strong>${esc(c ? c.entreprise : '')}</strong> ? Ses documents/notes seront supprimés sauf s'ils sont utilisés ailleurs (dossier, CVthèque, autre candidature). Action définitive.`,
+    })) {
+      const r = await api(`/api/candidatures/${id}`, { method: 'DELETE' });
+      toast(r && r.conserves ? `Candidature supprimée — ${r.conserves} élément(s) conservé(s) car utilisé(s) ailleurs` : 'Candidature supprimée');
       closeModal();
       await afterChange();
     }
@@ -2326,7 +2366,10 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.delFolder) {
     e.stopPropagation();
     const id = Number(t.dataset.delFolder);
-    if (confirm('Supprimer ce dossier ? Les fichiers et notes seront conservés (sans dossier).')) {
+    if (await confirmDialog({
+      title: 'Supprimer le dossier',
+      message: 'Supprimer ce dossier ? Les fichiers et notes qu\'il contient seront conservés (mais sans dossier).',
+    })) {
       await api(`/api/folders/${id}`, { method: 'DELETE' });
       if (State.currentFolder == id) State.currentFolder = 'all';
       toast('Dossier supprimé');
@@ -2341,7 +2384,10 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.delDoc) {
     const id = Number(t.dataset.delDoc);
     const reload = t.dataset.reloadCandidature;
-    if (confirm('Supprimer ce fichier définitivement ?')) {
+    if (await confirmDialog({
+      title: 'Supprimer le fichier',
+      message: 'Supprimer ce fichier définitivement ?',
+    })) {
       await api(`/api/documents/${id}`, { method: 'DELETE' });
       toast('Fichier supprimé');
       await refreshFolders();
@@ -2356,7 +2402,7 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.delNote) {
     const id = Number(t.dataset.delNote);
     const reload = t.dataset.reloadCandidature;
-    if (confirm('Supprimer cette note ?')) {
+    if (await confirmDialog({ title: 'Supprimer la note', message: 'Supprimer cette note définitivement ?' })) {
       await api(`/api/notes/${id}`, { method: 'DELETE' });
       toast('Note supprimée');
       await refreshFolders();
@@ -2383,7 +2429,7 @@ document.addEventListener('click', async (e) => {
   }
   if (t.dataset.delCvtheque) {
     const id = Number(t.dataset.delCvtheque);
-    if (confirm('Supprimer cette plateforme de la liste ?')) {
+    if (await confirmDialog({ title: 'Supprimer la plateforme', message: 'Supprimer cette plateforme (CVthèque) de la liste ?' })) {
       await api(`/api/cvtheques/${id}`, { method: 'DELETE' });
       toast('Plateforme supprimée');
       closeModal();
