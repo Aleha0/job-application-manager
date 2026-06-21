@@ -2022,6 +2022,14 @@ async function removePlat(name) {
 // Branche les contrôles statiques (présents dès le chargement).
 function setupStaticControls() {
   $('#openSearch')?.addEventListener('click', openSearch);
+  // Onglets des Paramètres
+  $('#settingsTabs')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    const tab = b.dataset.tab;
+    $$('#settingsTabs .tab').forEach((x) => x.classList.toggle('active', x === b));
+    $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== tab));
+  });
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();

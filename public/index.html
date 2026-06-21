@@ -188,151 +188,156 @@
           </div>
         </header>
 
-        <div class="card">
-          <div class="card-head"><h2>Rappels de relance</h2></div>
-          <div class="form-row">
-            <label for="setRelanceDelai">
-              Délai par défaut avant de signaler une relance
-              <span class="muted">(jours après l'envoi, si aucune date manuelle)</span>
-            </label>
-            <div class="inline">
-              <input type="number" id="setRelanceDelai" class="input input-sm" min="1" max="365" />
-              <span>jours</span>
-              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
-            </div>
-          </div>
-          <div class="form-row" style="border-top:1px solid var(--border)">
-            <label for="setCvthequeDelai">
-              Signaler une CVthèque « à mettre à jour » après
-              <span class="muted">(sans mise à jour depuis ce délai)</span>
-            </label>
-            <div class="inline">
-              <input type="number" id="setCvthequeDelai" class="input input-sm" min="1" max="60" />
-              <span>mois</span>
-              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
-            </div>
-          </div>
-          <div class="form-row" style="border-top:1px solid var(--border)">
-            <label for="setObjectifHebdo">
-              Objectif de candidatures par semaine
-              <span class="muted">(suivi du rythme dans les Statistiques)</span>
-            </label>
-            <div class="inline">
-              <input type="number" id="setObjectifHebdo" class="input input-sm" min="1" max="100" />
-              <span>/ semaine</span>
-              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
-            </div>
-          </div>
+        <div class="tabs" id="settingsTabs">
+          <button class="tab active" data-tab="general" type="button">Général</button>
+          <button class="tab" data-tab="notifs" type="button">Notifications</button>
+          <button class="tab" data-tab="listes" type="button">Listes</button>
+          <button class="tab" data-tab="offre" type="button">Offre &amp; IA</button>
+          <button class="tab" data-tab="apropos" type="button">À propos</button>
         </div>
 
-        <div class="card">
-          <div class="card-head"><h2>Notifications</h2></div>
+        <div class="tab-panel" data-panel="general">
+        <div class="settings-list">
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Délai de relance</div>
+              <div class="settings-row-desc">Jours après l'envoi sans réponse, si aucune date de relance manuelle.</div>
+            </div>
+            <div class="settings-row-control">
+              <input type="number" id="setRelanceDelai" class="input input-sm" min="1" max="365" />
+              <span class="muted">j</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Objectif hebdomadaire</div>
+              <div class="settings-row-desc">Nombre de candidatures visé par semaine (suivi du rythme dans les Statistiques).</div>
+            </div>
+            <div class="settings-row-control">
+              <input type="number" id="setObjectifHebdo" class="input input-sm" min="1" max="100" />
+              <span class="muted">/ sem.</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Délai « CVthèque à mettre à jour »</div>
+              <div class="settings-row-desc">Signaler une CVthèque sans mise à jour depuis ce délai.</div>
+            </div>
+            <div class="settings-row-control">
+              <input type="number" id="setCvthequeDelai" class="input input-sm" min="1" max="60" />
+              <span class="muted">mois</span>
+            </div>
+          </div>
+          <div class="settings-foot">
+            <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
+          </div>
+        </div>
+        </div>
 
-          <div class="form-row">
-            <label>📱 Notifications sur le téléphone (ntfy)</label>
-            <p class="muted" style="margin-bottom:10px">
-              Installe l'app <strong>ntfy</strong> (Android/iOS), abonne-toi à un sujet
-              au nom unique, puis indique-le ici. Le serveur t'enverra un récap des
-              relances. Astuce : utilise un nom long et difficile à deviner.
-            </p>
-            <div class="inline">
-              <input type="text" id="setNtfyTopic" class="input" style="max-width:340px"
+        <div class="tab-panel hidden" data-panel="notifs">
+        <div class="settings-list">
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">📱 Sur le téléphone (ntfy)</div>
+              <div class="settings-row-desc">Installe l'app <strong>ntfy</strong> (Android/iOS), abonne-toi à un sujet au nom unique et difficile à deviner, puis indique-le ici. Le serveur t'enverra un récap des relances.</div>
+            </div>
+            <div class="settings-row-control">
+              <input type="text" id="setNtfyTopic" class="input" style="flex:1; min-width:200px"
                 placeholder="ex: relances-candidatures-7gK9pZ2q" />
-              <button class="btn btn-secondary" id="btnNtfyGenerate" type="button">🎲 Générer</button>
+              <button class="btn btn-secondary" id="btnNtfyGenerate" type="button">🎲</button>
               <button class="btn btn-secondary" id="btnNtfyTest" type="button">Tester</button>
               <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
             </div>
-            <p class="muted" style="margin-top:8px">
-              Sujet à ajouter dans l'app ntfy :
-              <code id="ntfyTopicHint">—</code>
-            </p>
+            <div class="settings-hint">Sujet à ajouter dans l'app ntfy : <code id="ntfyTopicHint">—</code></div>
           </div>
-
-          <div class="form-row" style="border-top:1px solid var(--border)">
-            <label>💻 Notifications sur ce PC (navigateur)</label>
-            <p class="muted" style="margin-bottom:10px">
-              Affiche une notification système quand l'app est ouverte et que des
-              relances sont en attente.
-            </p>
-            <div class="inline">
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">💻 Sur ce PC (navigateur)</div>
+              <div class="settings-row-desc">Notification système quand l'app est ouverte et que des relances sont en attente.</div>
+            </div>
+            <div class="settings-row-control">
               <button class="btn btn-secondary" id="btnBrowserNotif" type="button">Activer les notifications navigateur</button>
               <span id="browserNotifStatus" class="muted"></span>
             </div>
           </div>
         </div>
-
-        <div class="card">
-          <div class="card-head"><h2>Étiquettes</h2></div>
-          <div class="form-row">
-            <p class="muted" style="margin-bottom:10px">
-              Ta liste d'étiquettes, assignables à chaque candidature et utilisables
-              comme filtre.
-            </p>
-            <div id="tagsManager" class="tag-manage"></div>
-            <div class="tag-add-row">
-              <input id="newTagInput" class="input" style="max-width:240px"
-                placeholder="Nouvelle étiquette" maxlength="30" />
-              <div class="swatches" id="tagSwatches"></div>
-              <button class="btn btn-secondary" id="btnAddTag" type="button">+ Ajouter</button>
-            </div>
-            <p class="muted" style="margin-top:8px">
-              Choisis une couleur dans la palette avant d'ajouter. Pour changer la
-              couleur d'une étiquette existante, clique sur sa pastille de couleur.
-            </p>
-          </div>
         </div>
 
-        <div class="card">
-          <div class="card-head"><h2>Plateformes de candidature</h2></div>
-          <div class="form-row">
-            <p class="muted" style="margin-bottom:10px">
-              Les plateformes par lesquelles tu postules (proposées dans le champ
-              « Plateforme de candidature » d'une candidature).
-            </p>
-            <div id="platManager" class="tag-manage"></div>
-            <div class="inline" style="margin-top:12px">
-              <input id="newPlatInput" class="input" style="max-width:280px"
-                placeholder="Nouvelle plateforme" maxlength="40" />
-              <button class="btn btn-secondary" id="btnAddPlat" type="button">+ Ajouter</button>
+        <div class="tab-panel hidden" data-panel="listes">
+        <div class="settings-list">
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Étiquettes</div>
+              <div class="settings-row-desc">Assignables à chaque candidature et utilisables comme filtre. Choisis une couleur avant d'ajouter ; clique la pastille d'une étiquette pour changer sa couleur.</div>
+            </div>
+            <div class="settings-row-control">
+              <div id="tagsManager" class="tag-manage"></div>
+              <div class="tag-add-row">
+                <input id="newTagInput" class="input" style="max-width:240px"
+                  placeholder="Nouvelle étiquette" maxlength="30" />
+                <div class="swatches" id="tagSwatches"></div>
+                <button class="btn btn-secondary" id="btnAddTag" type="button">+ Ajouter</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Plateformes de candidature</div>
+              <div class="settings-row-desc">Proposées dans le champ « Plateforme de candidature » d'une candidature.</div>
+            </div>
+            <div class="settings-row-control">
+              <div id="platManager" class="tag-manage"></div>
+              <div class="inline" style="margin-top:12px">
+                <input id="newPlatInput" class="input" style="max-width:280px"
+                  placeholder="Nouvelle plateforme" maxlength="40" />
+                <button class="btn btn-secondary" id="btnAddPlat" type="button">+ Ajouter</button>
+              </div>
             </div>
           </div>
         </div>
+        </div>
 
-        <div class="card">
-          <div class="card-head">
-            <h2>Remplissage auto depuis l'offre</h2>
-            <span id="aiStatusBadge" class="tag">—</span>
-          </div>
-          <div class="form-row">
-            <p class="muted" style="margin-bottom:10px">
-              Dans une candidature, colle le lien d'une offre puis clique sur
-              <strong>« ✨ Remplir »</strong> : l'app lit les données structurées de la
-              page (gratuit). Pour les sites qui n'en fournissent pas, tu peux activer
-              l'extraction par <strong>IA (Claude)</strong> en définissant une clé API.
-            </p>
-            <p class="muted">
-              Pour activer l'IA : crée une clé sur
-              <code>console.anthropic.com</code>, puis lance l'app avec la variable
-              d'environnement <code>ANTHROPIC_API_KEY</code> :
-            </p>
-            <pre style="background:var(--surface-2);padding:12px;border-radius:8px;overflow:auto;font-size:0.82rem;margin-top:8px"><code># PowerShell (Windows)
+        <div class="tab-panel hidden" data-panel="offre">
+        <div class="settings-list">
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">Remplissage auto depuis l'offre <span id="aiStatusBadge" class="tag">—</span></div>
+              <div class="settings-row-desc">
+                Dans une candidature, colle le lien d'une offre puis clique sur
+                <strong>« ✨ Remplir »</strong> : l'app lit les données structurées de la page
+                (gratuit). Pour les sites sans données structurées, active l'extraction par
+                <strong>IA (Claude)</strong> via une clé API. Le « coller le texte de l'offre »
+                marche aussi sans clé dès que l'IA est activée (recours idéal pour LinkedIn/Indeed).
+              </div>
+            </div>
+            <div class="settings-row-control">
+              <div style="width:100%">
+                <p class="muted" style="margin-bottom:6px">
+                  Pour activer l'IA : crée une clé sur <code>console.anthropic.com</code>, puis lance l'app avec :
+                </p>
+                <pre style="background:var(--surface-2);padding:12px;border-radius:8px;overflow:auto;font-size:0.82rem"><code># PowerShell (Windows)
 $env:ANTHROPIC_API_KEY="sk-ant-..."
 npm start</code></pre>
-            <p class="muted" style="margin-top:8px">
-              Le « coller le texte de l'offre » fonctionne aussi <strong>sans clé</strong>
-              dès que l'IA est activée, et reste le meilleur recours pour LinkedIn/Indeed.
-            </p>
+              </div>
+            </div>
           </div>
         </div>
+        </div>
 
-        <div class="card">
-          <div class="card-head"><h2>À propos</h2></div>
-          <p class="muted">
-            Application 100% locale. Tes données sont stockées sur ton ordinateur
-            (base <code>data/gestion.db</code> et fichiers dans <code>uploads/</code>).
-            Seule la fonction « Remplir depuis l'offre » contacte Internet
-            (la page de l'offre, et l'API Claude si tu l'actives).
-          </p>
+        <div class="tab-panel hidden" data-panel="apropos">
+        <div class="settings-list">
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">À propos</div>
+              <div class="settings-row-desc">
+                Application 100 % locale. Tes données sont stockées sur ton ordinateur
+                (base <code>data/gestion.db</code> et fichiers dans <code>uploads/</code>).
+                Seule la fonction « Remplir depuis l'offre » contacte Internet
+                (la page de l'offre, et l'API Claude si tu l'actives).
+              </div>
+            </div>
+          </div>
+        </div>
         </div>
       </section>
     </main>

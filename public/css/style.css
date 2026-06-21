@@ -301,6 +301,56 @@ a { color: var(--primary); }
   margin-bottom: 22px;
   overflow: hidden;
 }
+
+/* Onglets (ex: page Paramètres) */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 500;
+  color: var(--text-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* Réglages en liste épurée (Paramètres) */
+.settings-list { max-width: 780px; }
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 20px 2px;
+  border-top: 1px solid var(--border);
+}
+.settings-row:first-child { border-top: none; padding-top: 4px; }
+.settings-row-info { flex: 1; min-width: 0; }
+.settings-row-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.settings-row-desc { font-size: 0.83rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.settings-row-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.settings-row.stack { flex-direction: column; align-items: stretch; gap: 0; }
+.settings-row.stack .settings-row-control { width: 100%; margin-top: 12px; flex-wrap: wrap; }
+.settings-hint { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+.settings-foot { padding-top: 18px; }
 .card-head {
   display: flex;
   justify-content: space-between;
