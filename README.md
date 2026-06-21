@@ -18,6 +18,42 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Notes texte** : crée des fichiers texte pour consigner des informations, et
   rattache-les à une candidature ou à un dossier.
 - **Tableau de bord** avec statistiques.
+- **Remplissage auto depuis l'offre** : colle le lien d'une offre et l'app
+  pré-remplit les champs (entreprise, poste, lieu, salaire, contrat…).
+
+## ✨ Remplissage automatique depuis une offre d'emploi
+
+Dans une candidature, colle le lien de l'offre puis clique sur **« ✨ Remplir »** :
+
+1. **Données structurées (gratuit, sans configuration)** — l'app lit le format
+   standard `schema.org/JobPosting` présent sur de nombreux sites (Welcome to the
+   Jungle, pages carrières d'entreprises, certains Indeed/HelloWork…).
+2. **Extraction par IA (optionnelle)** — pour les sites qui ne fournissent pas ces
+   données, tu peux activer Claude. L'app bascule dessus automatiquement si une clé
+   API est configurée.
+3. **Coller le texte** — pour LinkedIn/Indeed (qui bloquent la lecture automatique),
+   clique sur « colle le texte de l'offre » et colle le contenu : l'IA l'analyse.
+
+### Activer l'extraction par IA (facultatif)
+
+Crée une clé API sur [console.anthropic.com](https://console.anthropic.com), puis
+lance l'app avec la variable d'environnement `ANTHROPIC_API_KEY` :
+
+```powershell
+# PowerShell (Windows)
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+npm start
+```
+
+```bash
+# macOS / Linux
+ANTHROPIC_API_KEY="sk-ant-..." npm start
+```
+
+Le modèle utilisé est `claude-opus-4-8` par défaut (modifiable via la variable
+`ANTHROPIC_MODEL`). Le coût par offre est de l'ordre de quelques centimes.
+Sans clé, seules les méthodes 1 et 3 (données structurées) restent disponibles —
+l'app fonctionne donc parfaitement sans aucune configuration.
 
 ## 🚀 Installation & lancement
 
