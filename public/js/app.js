@@ -43,6 +43,7 @@ const STATUT_CHIP_CLASS = {
   'Entretien': 'c-entretien',
   'Acceptée': 'c-acceptee',
   'Refusée': 'c-refusee',
+  'En réserve': 'c-reserve',
   'Sans réponse': 'c-sansreponse',
 };
 
@@ -53,6 +54,7 @@ const STATUT_CLASS = {
   'Entretien': 's-entretien',
   'Acceptée': 's-acceptee',
   'Refusée': 's-refusee',
+  'En réserve': 's-reserve',
   'Sans réponse': 's-sansreponse',
 };
 

@@ -28,11 +28,12 @@ const STATUTS = [
   'Entretien',
   'Acceptée',
   'Refusée',
+  'En réserve',
   'Sans réponse',
 ];
 
 // Statuts pour lesquels une relance a encore du sens.
-const STATUTS_RELANCABLES = ['Envoyée', 'Relancée'];
+const STATUTS_RELANCABLES = ['Envoyée', 'Relancée', 'En réserve'];
 
 // --- Middlewares ----------------------------------------------------------
 

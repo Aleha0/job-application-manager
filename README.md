@@ -10,7 +10,8 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Tableau de suivi** des candidatures (entreprise, poste, lieu, statut, salaire,
   type de contrat, recruteur, lien vers l'offre, dates).
 - **Statuts** : À postuler → Envoyée → Relancée → Entretien → Acceptée / Refusée,
-  ainsi que « Sans réponse » si tu ne souhaites pas relancer.
+  ainsi que « En réserve » (candidature « on vous recontactera au besoin » —
+  relançable périodiquement) et « Sans réponse » si tu ne souhaites pas relancer.
 - **Rappels de relance** : alerte flash en haut de page, basée sur un délai
   automatique configurable **et/ou** une date de relance manuelle par candidature.
 - **Documents** : importe tes CV et lettres (PDF, Word, images…) et range-les dans
