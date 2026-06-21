@@ -17,6 +17,7 @@
   "author": "Aleha0",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.69.0",
     "better-sqlite3": "^11.8.1",
     "express": "^4.21.2",
     "multer": "^2.2.0"
