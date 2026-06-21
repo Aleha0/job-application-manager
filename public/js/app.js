@@ -421,14 +421,18 @@ function moisLabel(ym) {
   return MOIS_COURTS[m - 1] || '';
 }
 
-// Barre horizontale (label + barre colorée + valeur).
-function hbar(label, value, max, colorVar) {
+// Barre horizontale : libellé complet au-dessus, barre + valeur en dessous.
+function hbar(label, value, max, colorVar, opts = {}) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
+  const display = opts.display !== undefined ? opts.display : value;
+  const title = opts.title ? ` title="${esc(opts.title)}"` : '';
   return `
-    <div class="hbar-row">
+    <div class="hbar-row"${title}>
       <div class="hbar-lbl">${esc(label)}</div>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:var(${colorVar})"></div></div>
-      <div class="hbar-val">${value}</div>
+      <div class="hbar-line">
+        <div class="hbar-track"><div class="hbar-fill" style="width:${w}%;background:var(${colorVar})"></div></div>
+        <div class="hbar-val">${esc(String(display))}</div>
+      </div>
     </div>`;
 }
 
@@ -500,28 +504,14 @@ async function renderStats() {
   // Taux d'entretien par plateforme (largeur = taux %)
   const tauxPlatHtml = (d.parPlateformeTaux || []).length
     ? d.parPlateformeTaux
-        .map(
-          (p) => `
-        <div class="hbar-row" title="${p.entretiens}/${p.total} entretiens">
-          <div class="hbar-lbl">${esc(p.nom)}</div>
-          <div class="hbar-track"><div class="hbar-fill" style="width:${p.taux}%;background:var(--amber)"></div></div>
-          <div class="hbar-val">${p.taux}%</div>
-        </div>`
-        )
+        .map((p) => hbar(p.nom, p.taux, 100, '--amber', { display: p.taux + '%', title: `${p.entretiens}/${p.total} entretiens` }))
         .join('')
     : '<span class="muted">Aucune plateforme renseignée.</span>';
 
   // Taux d'entretien par CV envoyé
   const cvTauxHtml = (d.parCvTaux || []).length
     ? d.parCvTaux
-        .map(
-          (cv) => `
-        <div class="hbar-row" title="${cv.entretiens}/${cv.total} entretiens">
-          <div class="hbar-lbl">${esc(cv.nom)}</div>
-          <div class="hbar-track"><div class="hbar-fill" style="width:${cv.taux}%;background:var(--green)"></div></div>
-          <div class="hbar-val">${cv.taux}%</div>
-        </div>`
-        )
+        .map((cv) => hbar(cv.nom, cv.taux, 100, '--green', { display: cv.taux + '%', title: `${cv.entretiens}/${cv.total} entretiens` }))
         .join('')
     : '<span class="muted">Renseigne le « CV envoyé » sur tes candidatures pour voir lequel fonctionne le mieux.</span>';
 
