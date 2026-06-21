@@ -25,6 +25,10 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
   (notifications du navigateur).
 - **Étiquettes** 🏷️ : liste d'étiquettes personnalisable (Paramètres), assignables
   à chaque candidature et utilisables comme filtre dans le tableau.
+- **Date de mise à jour des fichiers** 🕒 : demandée à l'import (et pré-remplie
+  automatiquement depuis les métadonnées du fichier), avec un repère
+  « à vérifier » pour les fichiers de plus de 6 mois — pratique pour savoir si un
+  CV est à jour.
 
 ## ✨ Remplissage automatique depuis une offre d'emploi
 

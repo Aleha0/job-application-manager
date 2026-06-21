@@ -101,4 +101,10 @@ if (!candCols.some((c) => c.name === 'tags')) {
   db.exec("ALTER TABLE candidatures ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
 }
 
+// Ajoute la colonne `file_date` (date de mise à jour du fichier) aux documents.
+const docCols = db.prepare('PRAGMA table_info(documents)').all();
+if (!docCols.some((c) => c.name === 'file_date')) {
+  db.exec('ALTER TABLE documents ADD COLUMN file_date TEXT');
+}
+
 module.exports = db;

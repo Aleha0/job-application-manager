@@ -158,6 +158,22 @@ function addDaysISO(iso, days) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 }
 
+// Convertit un timestamp (ex: File.lastModified) en date locale YYYY-MM-DD.
+function tsToLocalISO(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+}
+
+// Nombre de mois écoulés depuis une date ISO.
+function monthsSince(iso) {
+  if (!iso) return 0;
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return 0;
+  return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+}
+
 function toast(msg, type = 'ok') {
   const zone = $('#toastZone');
   const el = document.createElement('div');
@@ -756,7 +772,7 @@ async function loadLinkedItems(id) {
     .map(
       (d) => `
       <div class="inline" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span>${FOLDER_TYPE[d.type]?.ico || '📄'} ${esc(d.original_name)} <span class="cell-sub">${fmtSize(d.size)}</span></span>
+        <span>${FOLDER_TYPE[d.type]?.ico || '📄'} ${esc(d.original_name)} <span class="cell-sub">${fmtSize(d.size)}${d.file_date ? ' · 🕒 ' + fmtDate(d.file_date) : ''}</span></span>
         <span class="inline">
           <a class="btn-icon" href="/api/documents/${d.id}/view" target="_blank" title="Voir">👁️</a>
           <a class="btn-icon" href="/api/documents/${d.id}/download" title="Télécharger">⬇️</a>
@@ -851,6 +867,16 @@ async function renderDocsContent() {
   box.innerHTML = html;
 }
 
+// Indicateur de date de mise à jour d'un fichier (+ alerte si ancien).
+function fileDateBadge(d) {
+  if (!d.file_date) return '';
+  const old = monthsSince(d.file_date) >= 6;
+  const warn = old
+    ? ` <span class="tag" style="background:var(--amber-soft);color:var(--amber)">à vérifier</span>`
+    : '';
+  return `<div class="doc-meta">🕒 Maj : ${fmtDate(d.file_date)}${warn}</div>`;
+}
+
 function docCardHTML(d) {
   const ico = FOLDER_TYPE[d.type]?.ico || '📄';
   const link = d.candidature_id
@@ -861,6 +887,7 @@ function docCardHTML(d) {
       <div class="doc-ico">${ico}</div>
       <div class="doc-name">${esc(d.original_name)}</div>
       <div class="doc-meta">${FOLDER_TYPE[d.type]?.label || 'Fichier'} · ${fmtSize(d.size)}</div>
+      ${fileDateBadge(d)}
       ${link}
       <div class="doc-actions">
         <a class="btn btn-sm btn-secondary" href="/api/documents/${d.id}/view" target="_blank">👁️ Voir</a>
@@ -955,7 +982,7 @@ function uploadModal(candidatureId = null) {
       <form id="uploadForm">
         <div class="field" style="margin-bottom:16px">
           <label>Fichier * <span class="hint">(PDF, Word, image… max 25 Mo)</span></label>
-          <input class="input" type="file" name="file" required />
+          <input class="input" type="file" name="file" id="uploadFile" required />
         </div>
         <div class="form-grid">
           <div class="field">
@@ -967,10 +994,14 @@ function uploadModal(candidatureId = null) {
             </select>
           </div>
           <div class="field">
+            <label>Date du fichier <span class="hint">(mise à jour)</span></label>
+            <input class="input" type="date" name="file_date" id="uploadFileDate" />
+          </div>
+          <div class="field">
             <label>Dossier</label>
             <select class="input" name="folder_id">${folderOptions}</select>
           </div>
-          <div class="field full">
+          <div class="field">
             <label>Rattacher à une candidature</label>
             <select class="input" name="candidature_id">${candOptions}</select>
           </div>
@@ -982,6 +1013,14 @@ function uploadModal(candidatureId = null) {
       <button class="btn btn-primary" id="saveUpload">Importer</button>
     </div>
   `);
+
+  // Pré-remplit la date à partir des métadonnées du fichier (date de modif).
+  $('#uploadFile')?.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    const di = $('#uploadFileDate');
+    if (f && f.lastModified && di) di.value = tsToLocalISO(f.lastModified);
+  });
+
   $('#saveUpload').addEventListener('click', async () => {
     const form = $('#uploadForm');
     if (!form.reportValidity()) return;
@@ -1035,6 +1074,10 @@ async function editDocModal(id) {
               <option value="lettre" ${d.type === 'lettre' ? 'selected' : ''}>✉️ Lettre</option>
               <option value="autre" ${d.type === 'autre' ? 'selected' : ''}>📁 Autre</option>
             </select>
+          </div>
+          <div class="field">
+            <label>Date du fichier <span class="hint">(mise à jour)</span></label>
+            <input class="input" type="date" name="file_date" value="${esc((d.file_date || '').slice(0, 10))}" />
           </div>
           <div class="field">
             <label>Dossier</label>

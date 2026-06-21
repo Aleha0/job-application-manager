@@ -393,8 +393,8 @@ app.post(
     const info = db
       .prepare(`
         INSERT INTO documents
-          (folder_id, candidature_id, type, original_name, stored_name, mime, size)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (folder_id, candidature_id, type, original_name, stored_name, mime, size, file_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         b.folder_id ? Number(b.folder_id) : null,
@@ -403,7 +403,8 @@ app.post(
         fixOriginalName(req.file.originalname),
         req.file.filename,
         req.file.mimetype,
-        req.file.size
+        req.file.size,
+        b.file_date || null
       );
     res.status(201).json(
       db.prepare('SELECT * FROM documents WHERE id = ?').get(info.lastInsertRowid)
@@ -421,13 +422,14 @@ app.put(
     const type = ['cv', 'lettre', 'autre'].includes(b.type) ? b.type : existing.type;
     db.prepare(`
       UPDATE documents SET
-        folder_id = ?, candidature_id = ?, type = ?, original_name = ?
+        folder_id = ?, candidature_id = ?, type = ?, original_name = ?, file_date = ?
       WHERE id = ?
     `).run(
       b.folder_id !== undefined ? (b.folder_id ? Number(b.folder_id) : null) : existing.folder_id,
       b.candidature_id !== undefined ? (b.candidature_id ? Number(b.candidature_id) : null) : existing.candidature_id,
       type,
       b.original_name || existing.original_name,
+      b.file_date !== undefined ? (b.file_date || null) : existing.file_date,
       id
     );
     res.json(db.prepare('SELECT * FROM documents WHERE id = ?').get(id));
