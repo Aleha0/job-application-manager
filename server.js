@@ -12,7 +12,11 @@ const PORT = process.env.PORT || 3000;
 
 // --- Dossiers de stockage -------------------------------------------------
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+// Dossier des fichiers importés. Surchargeable via GC_UPLOAD_DIR pour isoler
+// les tests de la production (ne JAMAIS faire pointer les tests sur 'uploads/').
+const UPLOAD_DIR = process.env.GC_UPLOAD_DIR
+  ? path.resolve(process.env.GC_UPLOAD_DIR)
+  : path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // --- Constantes -----------------------------------------------------------

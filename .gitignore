@@ -5,6 +5,9 @@ node_modules/
 data/
 uploads/
 
+# Environnement de test isolé (jamais la base de production)
+.test-tmp/
+
 # Logs
 *.log
 npm-debug.log*
