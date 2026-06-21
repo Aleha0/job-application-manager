@@ -18,6 +18,9 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Notes texte** : crée des fichiers texte pour consigner des informations, et
   rattache-les à une candidature ou à un dossier.
 - **Tableau de bord** avec statistiques.
+- **Recherche globale** 🔍 : cherche en une fois dans les candidatures, documents et
+  notes (étiquettes incluses, insensible aux accents). Accès via le bouton de la
+  barre latérale ou le raccourci **Ctrl+K**.
 - **Remplissage auto depuis l'offre** : colle le lien d'une offre et l'app
   pré-remplit les champs (entreprise, poste, lieu, salaire, contrat…).
 - **Mode sombre** 🌙 : thème clair/sombre, mémorisé entre les sessions.

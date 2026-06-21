@@ -287,6 +287,76 @@ app.get(
 );
 
 // =========================================================================
+//  API : RECHERCHE GLOBALE
+// =========================================================================
+
+// Normalisation insensible à la casse ET aux accents.
+function normalizeStr(s) {
+  return (s == null ? '' : String(s))
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+app.get(
+  '/api/search',
+  asyncRoute((req, res) => {
+    const q = normalizeStr(req.query.q || '').trim();
+    if (q.length < 2) {
+      return res.json({ q, candidatures: [], documents: [], notes: [] });
+    }
+
+    const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+
+    const candidatures = db
+      .prepare('SELECT * FROM candidatures')
+      .all()
+      .map((c) => ({ ...c, tags: parseTags(c.tags), relance: computeRelance(c, delai) }))
+      .filter((c) =>
+        normalizeStr(
+          [c.entreprise, c.poste, c.lieu, c.recruteur_nom, c.recruteur_email,
+           c.salaire, c.type_contrat, c.statut, (c.tags || []).join(' ')].join(' ')
+        ).includes(q)
+      )
+      .slice(0, 25);
+
+    const documents = db
+      .prepare(`
+        SELECT d.*, f.nom AS folder_nom, c.entreprise AS candidature_entreprise,
+               c.poste AS candidature_poste
+        FROM documents d
+        LEFT JOIN folders f ON f.id = d.folder_id
+        LEFT JOIN candidatures c ON c.id = d.candidature_id
+      `)
+      .all()
+      .filter((d) =>
+        normalizeStr(
+          [d.original_name, d.type, d.folder_nom, d.candidature_entreprise, d.candidature_poste].join(' ')
+        ).includes(q)
+      )
+      .slice(0, 25);
+
+    const notes = db
+      .prepare(`
+        SELECT n.*, f.nom AS folder_nom, c.entreprise AS candidature_entreprise,
+               c.poste AS candidature_poste
+        FROM notes n
+        LEFT JOIN folders f ON f.id = n.folder_id
+        LEFT JOIN candidatures c ON c.id = n.candidature_id
+      `)
+      .all()
+      .filter((n) =>
+        normalizeStr(
+          [n.titre, n.contenu, n.folder_nom, n.candidature_entreprise, n.candidature_poste].join(' ')
+        ).includes(q)
+      )
+      .slice(0, 25);
+
+    res.json({ q, candidatures, documents, notes });
+  })
+);
+
+// =========================================================================
 //  API : DOSSIERS
 // =========================================================================
 

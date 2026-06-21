@@ -535,6 +535,131 @@ function emptyState(ico, title, sub) {
 }
 
 /* ===================================================================== */
+/*  Recherche globale                                                   */
+/* ===================================================================== */
+let lastSearchData = { candidatures: [], documents: [], notes: [] };
+
+function openSearch() {
+  openModal(`
+    <div class="search-box-head">
+      <span class="search-box-ico">🔍</span>
+      <input id="globalSearchInput" type="search" autocomplete="off"
+        placeholder="Rechercher une candidature, un document, une note, une étiquette…" />
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div id="searchResults" class="search-results">
+      <div class="search-hint">Tape au moins 2 caractères pour rechercher…</div>
+    </div>
+  `, { large: true });
+
+  const input = $('#globalSearchInput');
+  input?.focus();
+  let timer;
+  input?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => runSearch(input.value), 180);
+  });
+  $('#searchResults')?.addEventListener('click', (e) => {
+    const it = e.target.closest('[data-result-type]');
+    if (!it) return;
+    const type = it.dataset.resultType;
+    const id = Number(it.dataset.resultId);
+    if (type === 'candidature') {
+      const c = lastSearchData.candidatures.find((x) => x.id === id);
+      closeModal();
+      if (c) candidatureModal(c);
+    } else if (type === 'note') {
+      closeModal();
+      noteModal(id);
+    } else if (type === 'document') {
+      window.open(`/api/documents/${id}/view`, '_blank');
+    }
+  });
+}
+
+async function runSearch(q) {
+  const box = $('#searchResults');
+  if (!box) return;
+  if (!q || q.trim().length < 2) {
+    box.innerHTML = '<div class="search-hint">Tape au moins 2 caractères pour rechercher…</div>';
+    return;
+  }
+  try {
+    const data = await api(`/api/search?q=${encodeURIComponent(q.trim())}`);
+    lastSearchData = data;
+    renderSearchResults(data);
+  } catch (err) {
+    box.innerHTML = `<div class="search-empty">${esc(err.message)}</div>`;
+  }
+}
+
+function renderSearchResults(data) {
+  const box = $('#searchResults');
+  if (!box) return;
+  const { candidatures, documents, notes } = data;
+  const total = candidatures.length + documents.length + notes.length;
+  if (!total) {
+    box.innerHTML = '<div class="search-empty">Aucun résultat.</div>';
+    return;
+  }
+
+  let html = '';
+
+  if (candidatures.length) {
+    html += `<div class="search-section-title">Candidatures (${candidatures.length})</div>`;
+    html += candidatures
+      .map(
+        (c) => `
+        <div class="search-item" data-result-type="candidature" data-result-id="${c.id}">
+          <span class="search-item-ico">🎯</span>
+          <div class="search-item-body">
+            <div class="search-item-title">${esc(c.entreprise)}</div>
+            <div class="search-item-sub">${esc(c.poste)}${c.lieu ? ' · ' + esc(c.lieu) : ''}</div>
+          </div>
+          ${statutBadge(c.statut)}
+        </div>`
+      )
+      .join('');
+  }
+
+  if (documents.length) {
+    html += `<div class="search-section-title">Documents (${documents.length})</div>`;
+    html += documents
+      .map((d) => {
+        const sub = [d.folder_nom, d.candidature_entreprise].filter(Boolean).map(esc).join(' · ');
+        return `
+        <div class="search-item" data-result-type="document" data-result-id="${d.id}">
+          <span class="search-item-ico">${FOLDER_TYPE[d.type]?.ico || '📄'}</span>
+          <div class="search-item-body">
+            <div class="search-item-title">${esc(d.original_name)}</div>
+            <div class="search-item-sub">${sub || (FOLDER_TYPE[d.type]?.label || 'Fichier')}</div>
+          </div>
+        </div>`;
+      })
+      .join('');
+  }
+
+  if (notes.length) {
+    html += `<div class="search-section-title">Notes (${notes.length})</div>`;
+    html += notes
+      .map((n) => {
+        const preview = (n.contenu || '').slice(0, 60);
+        return `
+        <div class="search-item" data-result-type="note" data-result-id="${n.id}">
+          <span class="search-item-ico">📝</span>
+          <div class="search-item-body">
+            <div class="search-item-title">${esc(n.titre)}</div>
+            <div class="search-item-sub">${esc(preview)}${preview.length >= 60 ? '…' : ''}</div>
+          </div>
+        </div>`;
+      })
+      .join('');
+  }
+
+  box.innerHTML = html;
+}
+
+/* ===================================================================== */
 /*  Modale : Candidature (créer / éditer)                              */
 /* ===================================================================== */
 function candidatureModal(c = null) {
@@ -1420,6 +1545,13 @@ async function recolorTag(name) {
 
 // Branche les contrôles statiques (présents dès le chargement).
 function setupStaticControls() {
+  $('#openSearch')?.addEventListener('click', openSearch);
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      openSearch();
+    }
+  });
   $('#themeToggle')?.addEventListener('click', toggleTheme);
   $('#btnBrowserNotif')?.addEventListener('click', enableBrowserNotif);
   $('#btnNtfyTest')?.addEventListener('click', testNtfy);

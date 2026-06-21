@@ -114,6 +114,77 @@ a { color: var(--primary); }
 .brand-logo { font-size: 1.5rem; }
 .brand-name { font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; }
 
+/* Bouton de recherche globale (barre latérale) */
+.side-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.side-search:hover { border-color: var(--primary); color: var(--text); }
+.side-search-text { flex: 1; text-align: left; font-size: 0.88rem; }
+.side-search-kbd {
+  font-size: 0.66rem;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+
+/* Fenêtre de recherche globale */
+.search-box-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.search-box-ico { font-size: 1.1rem; opacity: 0.7; }
+.search-box-head input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+}
+.search-box-head input:focus { outline: none; }
+.search-results { max-height: 60vh; overflow-y: auto; padding: 8px; }
+.search-hint, .search-empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+.search-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 12px 12px 6px;
+}
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.search-item:hover { background: var(--surface-2); }
+.search-item-ico { font-size: 1.15rem; flex-shrink: 0; }
+.search-item-body { flex: 1; min-width: 0; }
+.search-item-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item-sub { font-size: 0.8rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item .badge, .search-item .tagchip { flex-shrink: 0; }
+
 .nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-item {
   display: flex;
