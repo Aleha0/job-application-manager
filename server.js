@@ -347,6 +347,21 @@ app.get(
     const cloturees = g('Acceptée') + g('Refusée') + g('Sans réponse');
     const actives = total - cloturees;
 
+    // Rythme : candidatures cette semaine (lun-dim) et ce mois.
+    const now = new Date();
+    const dow = (now.getDay() + 6) % 7; // lundi = 0
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+    const weekStart = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let semaine = 0;
+    let moisCourant = 0;
+    for (const r of rows) {
+      const dc = r.date_candidature || '';
+      if (dc && dc >= weekStart) semaine++;
+      if (dc.slice(0, 7) === curMonth) moisCourant++;
+    }
+    const objectifHebdo = parseInt(getSetting('objectif_hebdo', '5'), 10) || 5;
+
     const envoyees = total - g('À postuler');
     const entretiens = g('Entretien') + g('Acceptée');
     const acceptees = g('Acceptée');
@@ -360,6 +375,7 @@ app.get(
       parPlateformeTaux,
       parLieu,
       activite: { actives, cloturees },
+      rythme: { semaine, mois: moisCourant, objectif: objectifHebdo },
       funnel: { envoyees, entretiens, acceptees },
       taux: {
         reponse: pct(reponses, envoyees),

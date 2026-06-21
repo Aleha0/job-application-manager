@@ -167,6 +167,8 @@ if (!cvthequesExisted) {
 }
 // Délai (mois) avant de signaler une CVthèque « à mettre à jour ».
 seedSetting.run('cvtheque_maj_delai_mois', '3');
+// Objectif de candidatures par semaine (suivi du rythme).
+seedSetting.run('objectif_hebdo', '5');
 
 // Liaison plusieurs-à-plusieurs entre CVthèques et documents (CV).
 db.exec(`

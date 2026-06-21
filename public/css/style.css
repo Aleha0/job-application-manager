@@ -351,6 +351,14 @@ a { color: var(--primary); }
 .vbar-val { font-size: 0.72rem; font-weight: 600; color: var(--text-soft); height: 14px; }
 .vbar-lbl { font-size: 0.7rem; color: var(--muted); margin-top: 3px; }
 
+/* Objectif hebdomadaire */
+.obj-line { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.obj-big { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+.obj-sep { font-size: 1.05rem; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.obj-track { height: 14px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.obj-fill { height: 100%; background: var(--primary); border-radius: 999px; transition: width 0.3s; }
+.obj-fill.done { background: var(--green); }
+
 /* ===================================================================== */
 /*  Tableaux                                                             */
 /* ===================================================================== */

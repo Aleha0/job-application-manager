@@ -521,10 +521,30 @@ async function renderStats() {
     hbar('Actives', act.actives, d.total, '--blue') +
     hbar('Clôturées', act.cloturees, d.total, '--gray');
 
+  // Objectif hebdomadaire
+  const ry = d.rythme || { semaine: 0, mois: 0, objectif: 5 };
+  const objPct = ry.objectif > 0 ? Math.min(100, Math.round((ry.semaine / ry.objectif) * 100)) : 0;
+  const objAtteint = ry.semaine >= ry.objectif;
+  const objHtml = `
+    <div class="obj-line">
+      <span class="obj-big">${ry.semaine}<span class="obj-sep">/ ${ry.objectif}</span></span>
+      <span class="muted">candidatures cette semaine</span>
+    </div>
+    <div class="obj-track"><div class="obj-fill ${objAtteint ? 'done' : ''}" style="width:${objPct}%"></div></div>
+    <p class="muted" style="margin-top:9px">
+      ${objAtteint ? '🎉 Objectif atteint, bravo !' : `Plus que ${ry.objectif - ry.semaine} pour atteindre ton objectif.`}
+      · <strong>${ry.mois}</strong> ce mois-ci.
+    </p>`;
+
   box.innerHTML = `
     <div class="stat-grid">${cardsHtml}</div>
 
     <div class="charts-grid">
+      <div class="card">
+        <div class="card-head"><h2>🎯 Objectif de la semaine</h2></div>
+        <div class="card-body">${objHtml}</div>
+      </div>
+
       <div class="card">
         <div class="card-head"><h2>Candidatures par mois</h2></div>
         <div class="card-body"><div class="vbars">${moisHtml}</div></div>
@@ -1667,6 +1687,8 @@ function renderSettings() {
   $('#setRelanceDelai').value = State.settings.relance_delai_jours || '7';
   const cvDelai = $('#setCvthequeDelai');
   if (cvDelai) cvDelai.value = State.settings.cvtheque_maj_delai_mois || '3';
+  const objHebdo = $('#setObjectifHebdo');
+  if (objHebdo) objHebdo.value = State.settings.objectif_hebdo || '5';
 
   // ntfy
   const topic = State.settings.ntfy_topic || '';
@@ -1703,14 +1725,21 @@ async function saveSettings() {
   const delai = $('#setRelanceDelai').value;
   const ntfyTopic = ($('#setNtfyTopic')?.value || '').trim();
   const cvDelai = $('#setCvthequeDelai')?.value || '3';
+  const objHebdo = $('#setObjectifHebdo')?.value || '5';
   try {
     await api('/api/settings', {
       method: 'PUT',
-      body: { relance_delai_jours: delai, ntfy_topic: ntfyTopic, cvtheque_maj_delai_mois: cvDelai },
+      body: {
+        relance_delai_jours: delai,
+        ntfy_topic: ntfyTopic,
+        cvtheque_maj_delai_mois: cvDelai,
+        objectif_hebdo: objHebdo,
+      },
     });
     State.settings.relance_delai_jours = delai;
     State.settings.ntfy_topic = ntfyTopic;
     State.settings.cvtheque_maj_delai_mois = cvDelai;
+    State.settings.objectif_hebdo = objHebdo;
     const hint = $('#ntfyTopicHint');
     if (hint) hint.textContent = ntfyTopic || '—';
     toast('Paramètres enregistrés');
