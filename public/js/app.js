@@ -136,6 +136,16 @@ function getPredefinedTags() {
   return getTagDefs().map((d) => d.name);
 }
 
+// Liste des plateformes de candidature (modifiable dans les Paramètres).
+function getPlateformes() {
+  try {
+    const a = JSON.parse(State.settings.plateformes || '[]');
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function tagHueByName(name) {
   const d = getTagDefs().find((x) => x.name === name);
   return d ? d.hue : tagHue(name);
@@ -501,7 +511,7 @@ function candidaturesTableHTML(list, compact) {
             ${tags}
           </td>
           <td>${statutBadge(c.statut)}</td>
-          ${compact ? '' : `<td>${esc(c.lieu || '—')} ${contrat}</td>`}
+          ${compact ? '' : `<td>${esc(c.lieu || '—')} ${contrat}${c.plateforme ? `<div class="cell-sub">📨 ${esc(c.plateforme)}</div>` : ''}</td>`}
           <td>${fmtDate(c.date_candidature)}</td>
           <td>${relance}</td>
           <td>
@@ -688,6 +698,11 @@ function candidatureModal(c = null) {
   const contratOptions = contrats
     .map((t) => `<option value="${esc(t)}" ${c.type_contrat === t ? 'selected' : ''}>${t || '—'}</option>`)
     .join('');
+  const plateformeOptions =
+    `<option value="">—</option>` +
+    getPlateformes()
+      .map((p) => `<option value="${esc(p)}" ${c.plateforme === p ? 'selected' : ''}>${esc(p)}</option>`)
+      .join('');
 
   openModal(`
     <div class="modal-head">
@@ -724,6 +739,10 @@ function candidatureModal(c = null) {
           <div class="field">
             <label>Type de contrat</label>
             <select class="input" name="type_contrat">${contratOptions}</select>
+          </div>
+          <div class="field">
+            <label>Plateforme de candidature</label>
+            <select class="input" name="plateforme">${plateformeOptions}</select>
           </div>
           <div class="field">
             <label>Salaire proposé</label>
@@ -1475,6 +1494,9 @@ function renderSettings() {
   renderSwatches();
   renderTagsManager();
 
+  // Gestion des plateformes de candidature
+  renderPlatManager();
+
   const badge = $('#aiStatusBadge');
   if (badge) {
     if (State.aiAvailable) {
@@ -1699,6 +1721,58 @@ async function recolorTag(name) {
   }
 }
 
+/* ===================================================================== */
+/*  Gestion des plateformes de candidature (Paramètres)                */
+/* ===================================================================== */
+function renderPlatManager() {
+  const box = $('#platManager');
+  if (!box) return;
+  const plats = getPlateformes();
+  box.innerHTML = plats.length
+    ? plats
+        .map(
+          (p) =>
+            `<span class="tagchip" style="--th:212">${esc(p)}<button class="tag-x" data-del-plat="${esc(p)}" title="Supprimer">✕</button></span>`
+        )
+        .join('')
+    : '<span class="muted">Aucune plateforme pour le moment.</span>';
+}
+
+async function savePlateformes(plats) {
+  await api('/api/settings', { method: 'PUT', body: { plateformes: JSON.stringify(plats) } });
+  State.settings.plateformes = JSON.stringify(plats);
+  renderPlatManager();
+}
+
+async function addPlatFromInput() {
+  const input = $('#newPlatInput');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  const plats = getPlateformes();
+  if (plats.some((p) => p.toLowerCase() === name.toLowerCase())) {
+    toast('Cette plateforme existe déjà', 'err');
+    return;
+  }
+  plats.push(name);
+  input.value = '';
+  try {
+    await savePlateformes(plats);
+    toast('Plateforme ajoutée');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+async function removePlat(name) {
+  try {
+    await savePlateformes(getPlateformes().filter((p) => p !== name));
+    toast('Plateforme supprimée');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
 // Branche les contrôles statiques (présents dès le chargement).
 function setupStaticControls() {
   $('#openSearch')?.addEventListener('click', openSearch);
@@ -1728,6 +1802,14 @@ function setupStaticControls() {
     if (del) { removeTag(del.dataset.delTag); return; }
     const rec = e.target.closest('[data-recolor]');
     if (rec) recolorTag(rec.dataset.recolor);
+  });
+  $('#btnAddPlat')?.addEventListener('click', addPlatFromInput);
+  $('#newPlatInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addPlatFromInput(); }
+  });
+  $('#platManager')?.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-plat]');
+    if (del) removePlat(del.dataset.delPlat);
   });
 }
 

@@ -82,6 +82,12 @@ seedSetting.run('relance_delai_jours', '7');
 // Notifications ntfy (téléphone). Sujet vide = désactivé.
 seedSetting.run('ntfy_topic', '');
 seedSetting.run('ntfy_server', 'https://ntfy.sh');
+// Liste des plateformes de candidature (modifiable dans les Paramètres).
+seedSetting.run('plateformes', JSON.stringify([
+  'HelloWork', 'LinkedIn', 'Indeed', 'Welcome to the Jungle', 'APEC',
+  'France Travail', "Site de l'entreprise", 'Cooptation',
+  'En physique', 'Par e-mail',
+]));
 // Liste d'étiquettes prédéfinies (modifiable dans les Paramètres).
 // Format : [{ name, hue }]. Les anciens formats (tableau de chaînes) restent
 // pris en charge côté frontend.
@@ -99,6 +105,30 @@ seedSetting.run('tags', JSON.stringify([
 const candCols = db.prepare('PRAGMA table_info(candidatures)').all();
 if (!candCols.some((c) => c.name === 'tags')) {
   db.exec("ALTER TABLE candidatures ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+}
+
+// Ajoute la colonne `plateforme` (canal de candidature) aux candidatures.
+if (!candCols.some((c) => c.name === 'plateforme')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN plateforme TEXT');
+}
+
+// Migration unique : ajoute « En physique » et « Par e-mail » aux plateformes
+// existantes (remplace l'ancien « En personne »). Ne s'exécute qu'une fois.
+const migPlatDone = db.prepare("SELECT value FROM settings WHERE key = 'migr_plat_spontane'").get();
+if (!migPlatDone) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'plateformes'").get();
+  let arr = [];
+  try { arr = JSON.parse(row ? row.value : '[]'); } catch { arr = []; }
+  if (Array.isArray(arr)) {
+    arr = arr.filter((p) => p !== 'En personne');
+    for (const p of ['En physique', 'Par e-mail']) {
+      if (!arr.includes(p)) arr.push(p);
+    }
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('plateformes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(JSON.stringify(arr));
+  }
+  seedSetting.run('migr_plat_spontane', '1');
 }
 
 // Ajoute la colonne `file_date` (date de mise à jour du fichier) aux documents.

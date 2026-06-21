@@ -167,10 +167,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, tags)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, tags)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @tags)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @tags)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -184,6 +184,7 @@ app.post(
       lien_offre: b.lien_offre || null,
       salaire: b.salaire || null,
       type_contrat: b.type_contrat || null,
+      plateforme: b.plateforme || null,
       tags: normalizeTags(b.tags),
     });
     const row = db
@@ -214,6 +215,7 @@ app.put(
         lien_offre = @lien_offre,
         salaire = @salaire,
         type_contrat = @type_contrat,
+        plateforme = @plateforme,
         tags = @tags,
         updated_at = datetime('now')
       WHERE id = @id
@@ -230,6 +232,7 @@ app.put(
       lien_offre: b.lien_offre ?? existing.lien_offre,
       salaire: b.salaire ?? existing.salaire,
       type_contrat: b.type_contrat ?? existing.type_contrat,
+      plateforme: b.plateforme !== undefined ? (b.plateforme || null) : existing.plateforme,
       tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
@@ -316,7 +319,7 @@ app.get(
       .filter((c) =>
         normalizeStr(
           [c.entreprise, c.poste, c.lieu, c.recruteur_nom, c.recruteur_email,
-           c.salaire, c.type_contrat, c.statut, (c.tags || []).join(' ')].join(' ')
+           c.salaire, c.type_contrat, c.statut, c.plateforme, (c.tags || []).join(' ')].join(' ')
         ).includes(q)
       )
       .slice(0, 25);
