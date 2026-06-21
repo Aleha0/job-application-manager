@@ -167,10 +167,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, tags)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, cv_document_id, tags)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @tags)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @cv_document_id, @tags)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -186,6 +186,7 @@ app.post(
       type_contrat: b.type_contrat || null,
       plateforme: b.plateforme || null,
       date_reponse: b.date_reponse || null,
+      cv_document_id: b.cv_document_id ? Number(b.cv_document_id) : null,
       tags: normalizeTags(b.tags),
     });
     const row = db
@@ -218,6 +219,7 @@ app.put(
         type_contrat = @type_contrat,
         plateforme = @plateforme,
         date_reponse = @date_reponse,
+        cv_document_id = @cv_document_id,
         tags = @tags,
         updated_at = datetime('now')
       WHERE id = @id
@@ -236,6 +238,7 @@ app.put(
       type_contrat: b.type_contrat ?? existing.type_contrat,
       plateforme: b.plateforme !== undefined ? (b.plateforme || null) : existing.plateforme,
       date_reponse: b.date_reponse !== undefined ? (b.date_reponse || null) : existing.date_reponse,
+      cv_document_id: b.cv_document_id !== undefined ? (b.cv_document_id ? Number(b.cv_document_id) : null) : existing.cv_document_id,
       tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
@@ -307,7 +310,7 @@ function lastNMonths(n) {
 app.get(
   '/api/stats/charts',
   asyncRoute((req, res) => {
-    const rows = db.prepare('SELECT statut, date_candidature, date_reponse, plateforme, lieu FROM candidatures').all();
+    const rows = db.prepare('SELECT statut, date_candidature, date_reponse, plateforme, lieu, cv_document_id FROM candidatures').all();
     const total = rows.length;
 
     const parStatut = {};
@@ -376,6 +379,21 @@ app.get(
     }
     const delaiReponse = { jours: nbReponses > 0 ? Math.round(sumDelai / nbReponses) : null, nb: nbReponses };
 
+    // Taux d'entretien par CV envoyé.
+    const cvStats = {}; // doc id -> { total, entretiens }
+    for (const r of rows) {
+      if (r.cv_document_id) {
+        const cs = cvStats[r.cv_document_id] || (cvStats[r.cv_document_id] = { total: 0, entretiens: 0 });
+        cs.total++;
+        if (estEntretien(r.statut)) cs.entretiens++;
+      }
+    }
+    const docNames = {};
+    for (const d of db.prepare('SELECT id, original_name FROM documents').all()) docNames[d.id] = d.original_name;
+    const parCvTaux = Object.entries(cvStats)
+      .map(([id, o]) => ({ nom: docNames[id] || 'CV supprimé', total: o.total, entretiens: o.entretiens, taux: pct(o.entretiens, o.total) }))
+      .sort((a, b) => b.taux - a.taux || b.total - a.total);
+
     const envoyees = total - g('À postuler');
     const entretiens = g('Entretien') + g('Acceptée');
     const acceptees = g('Acceptée');
@@ -391,6 +409,7 @@ app.get(
       activite: { actives, cloturees },
       rythme: { semaine, mois: moisCourant, objectif: objectifHebdo },
       delaiReponse,
+      parCvTaux,
       funnel: { envoyees, entretiens, acceptees },
       taux: {
         reponse: pct(reponses, envoyees),

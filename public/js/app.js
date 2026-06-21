@@ -511,6 +511,20 @@ async function renderStats() {
         .join('')
     : '<span class="muted">Aucune plateforme renseignée.</span>';
 
+  // Taux d'entretien par CV envoyé
+  const cvTauxHtml = (d.parCvTaux || []).length
+    ? d.parCvTaux
+        .map(
+          (cv) => `
+        <div class="hbar-row" title="${cv.entretiens}/${cv.total} entretiens">
+          <div class="hbar-lbl">${esc(cv.nom)}</div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:${cv.taux}%;background:var(--green)"></div></div>
+          <div class="hbar-val">${cv.taux}%</div>
+        </div>`
+        )
+        .join('')
+    : '<span class="muted">Renseigne le « CV envoyé » sur tes candidatures pour voir lequel fonctionne le mieux.</span>';
+
   // Par lieu
   const maxLieu = Math.max(1, ...(d.parLieu || []).map((l) => l.count));
   const lieuHtml = (d.parLieu || []).length
@@ -581,6 +595,11 @@ async function renderStats() {
       <div class="card">
         <div class="card-head"><h2>Taux d'entretien par plateforme</h2></div>
         <div class="card-body">${tauxPlatHtml}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Quel CV marche le mieux</h2></div>
+        <div class="card-body">${cvTauxHtml}</div>
       </div>
 
       <div class="card">
@@ -865,7 +884,7 @@ function renderSearchResults(data) {
 /* ===================================================================== */
 /*  Modale : Candidature (créer / éditer)                              */
 /* ===================================================================== */
-function candidatureModal(c = null) {
+async function candidatureModal(c = null) {
   const isEdit = !!c;
   c = c || {};
 
@@ -892,6 +911,16 @@ function candidatureModal(c = null) {
     `<option value="">—</option>` +
     getPlateformes()
       .map((p) => `<option value="${esc(p)}" ${c.plateforme === p ? 'selected' : ''}>${esc(p)}</option>`)
+      .join('');
+
+  // Liste des documents (CV en premier) pour le champ « CV envoyé ».
+  let docsForCv = [];
+  try { docsForCv = await api('/api/documents'); } catch { docsForCv = []; }
+  docsForCv.sort((a, b) => (a.type === 'cv' ? -1 : 1) - (b.type === 'cv' ? -1 : 1));
+  const cvEnvoyeOptions =
+    `<option value="">—</option>` +
+    docsForCv
+      .map((dd) => `<option value="${dd.id}" ${c.cv_document_id == dd.id ? 'selected' : ''}>${esc(dd.original_name)}${dd.type === 'cv' ? ' (CV)' : ''}</option>`)
       .join('');
 
   openModal(`
@@ -969,6 +998,10 @@ function candidatureModal(c = null) {
             <div class="field">
               <label>Date de réponse <span class="hint">(quand l'employeur répond)</span></label>
               <input class="input" type="date" name="date_reponse" value="${esc((c.date_reponse || '').slice(0, 10))}" />
+            </div>
+            <div class="field">
+              <label>CV envoyé</label>
+              <select class="input" name="cv_document_id">${cvEnvoyeOptions}</select>
             </div>
             <div class="field full">
               <label>Étiquettes</label>

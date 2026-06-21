@@ -117,6 +117,11 @@ if (!candCols.some((c) => c.name === 'date_reponse')) {
   db.exec('ALTER TABLE candidatures ADD COLUMN date_reponse TEXT');
 }
 
+// Ajoute la colonne `cv_document_id` (CV envoyé) aux candidatures.
+if (!candCols.some((c) => c.name === 'cv_document_id')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN cv_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL');
+}
+
 // Migration unique : ajoute « En physique » et « Par e-mail » aux plateformes
 // existantes (remplace l'ancien « En personne »). Ne s'exécute qu'une fois.
 const migPlatDone = db.prepare("SELECT value FROM settings WHERE key = 'migr_plat_spontane'").get();
