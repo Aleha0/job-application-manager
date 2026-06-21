@@ -711,75 +711,95 @@ function candidatureModal(c = null) {
     </div>
     <div class="modal-body">
       <form id="candidatureForm">
-        <div class="form-grid">
-          <div class="field">
-            <label>Entreprise *</label>
-            <input class="input" name="entreprise" required value="${esc(c.entreprise)}" />
+        <!-- Remplissage automatique depuis l'offre -->
+        <div class="offer-fill">
+          <div class="offer-fill-head">✨ Remplir depuis l'offre</div>
+          <div class="inline" style="gap:8px; flex-wrap:nowrap">
+            <input class="input" type="url" name="lien_offre" id="lienOffreInput" value="${esc(c.lien_offre)}" placeholder="https://… lien de l'offre" style="flex:1" />
+            <button type="button" class="btn btn-primary" id="btnFillFromUrl" title="Remplir les champs depuis l'offre">✨ Remplir</button>
           </div>
-          <div class="field">
-            <label>Poste *</label>
-            <input class="input" name="poste" required value="${esc(c.poste)}" />
-          </div>
-          <div class="field">
-            <label>Statut</label>
-            <select class="input" name="statut">${statutOptions}</select>
-          </div>
-          <div class="field">
-            <label>Lieu / Ville</label>
-            <input class="input" name="lieu" value="${esc(c.lieu)}" />
-          </div>
-          <div class="field">
-            <label>Date de candidature</label>
-            <input class="input" type="date" name="date_candidature" value="${esc(valDateCand)}" />
-          </div>
-          <div class="field">
-            <label>Date de relance <span class="hint">(pré-remplie, modifiable)</span></label>
-            <input class="input" type="date" name="date_relance" value="${esc(valDateRelance)}" />
-          </div>
-          <div class="field">
-            <label>Type de contrat</label>
-            <select class="input" name="type_contrat">${contratOptions}</select>
-          </div>
-          <div class="field">
-            <label>Plateforme de candidature</label>
-            <select class="input" name="plateforme">${plateformeOptions}</select>
-          </div>
-          <div class="field">
-            <label>Salaire proposé</label>
-            <input class="input" name="salaire" value="${esc(c.salaire)}" placeholder="ex: 38 000 €" />
-          </div>
-          <div class="field">
-            <label>Nom du recruteur</label>
-            <input class="input" name="recruteur_nom" value="${esc(c.recruteur_nom)}" />
-          </div>
-          <div class="field">
-            <label>Email du recruteur</label>
-            <input class="input" type="email" name="recruteur_email" value="${esc(c.recruteur_email)}" />
-          </div>
-          <div class="field full">
-            <label>Lien vers l'offre</label>
-            <div class="inline" style="gap:8px; flex-wrap:nowrap">
-              <input class="input" type="url" name="lien_offre" id="lienOffreInput" value="${esc(c.lien_offre)}" placeholder="https://..." style="flex:1" />
-              <button type="button" class="btn btn-secondary" id="btnFillFromUrl" title="Remplir les champs depuis l'offre">✨ Remplir</button>
-            </div>
-            <span class="hint">Colle le lien puis clique sur « Remplir », ou
-              <a href="#" id="lnkPasteText">colle le texte de l'offre</a>.</span>
-            <div id="pasteTextBlock" class="hidden" style="margin-top:10px">
-              <textarea class="input" id="offerTextArea" rows="6"
-                placeholder="Colle ici le texte complet de l'offre d'emploi..."></textarea>
-              <div class="inline" style="margin-top:8px">
-                <button type="button" class="btn btn-secondary btn-sm" id="btnFillFromText">Extraire depuis le texte</button>
-              </div>
+          <span class="hint">Colle le lien puis clique sur « Remplir », ou
+            <a href="#" id="lnkPasteText">colle le texte de l'offre</a>.</span>
+          <div id="pasteTextBlock" class="hidden" style="margin-top:10px">
+            <textarea class="input" id="offerTextArea" rows="6"
+              placeholder="Colle ici le texte complet de l'offre d'emploi..."></textarea>
+            <div class="inline" style="margin-top:8px">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnFillFromText">Extraire depuis le texte</button>
             </div>
           </div>
-          <div class="field full">
-            <label>Étiquettes</label>
-            ${predefTags.length
-              ? `<div class="tag-pick">${predefTags.map((t) => {
-                  const on = selectedTags.includes(t);
-                  return `<label class="tag-pick-item" style="--th:${tagHueByName(t)}"><input type="checkbox" name="tag" value="${esc(t)}" ${on ? 'checked' : ''} hidden />${esc(t)}</label>`;
-                }).join('')}</div>`
-              : `<span class="hint">Aucune étiquette définie. Crée-en dans <a href="#" data-go-settings>Paramètres → Étiquettes</a>.</span>`}
+        </div>
+
+        <!-- Le poste -->
+        <div class="form-section">
+          <div class="form-section-title" style="--accent: var(--blue)">🏢 Le poste</div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Entreprise *</label>
+              <input class="input" name="entreprise" required value="${esc(c.entreprise)}" />
+            </div>
+            <div class="field">
+              <label>Poste *</label>
+              <input class="input" name="poste" required value="${esc(c.poste)}" />
+            </div>
+            <div class="field">
+              <label>Lieu / Ville</label>
+              <input class="input" name="lieu" value="${esc(c.lieu)}" />
+            </div>
+            <div class="field">
+              <label>Type de contrat</label>
+              <select class="input" name="type_contrat">${contratOptions}</select>
+            </div>
+            <div class="field">
+              <label>Salaire proposé</label>
+              <input class="input" name="salaire" value="${esc(c.salaire)}" placeholder="ex: 38 000 €" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Suivi de la candidature -->
+        <div class="form-section">
+          <div class="form-section-title" style="--accent: var(--teal)">📋 Suivi de la candidature</div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Statut</label>
+              <select class="input" name="statut">${statutOptions}</select>
+            </div>
+            <div class="field">
+              <label>Plateforme de candidature</label>
+              <select class="input" name="plateforme">${plateformeOptions}</select>
+            </div>
+            <div class="field">
+              <label>Date de candidature</label>
+              <input class="input" type="date" name="date_candidature" value="${esc(valDateCand)}" />
+            </div>
+            <div class="field">
+              <label>Date de relance <span class="hint">(pré-remplie, modifiable)</span></label>
+              <input class="input" type="date" name="date_relance" value="${esc(valDateRelance)}" />
+            </div>
+            <div class="field full">
+              <label>Étiquettes</label>
+              ${predefTags.length
+                ? `<div class="tag-pick">${predefTags.map((t) => {
+                    const on = selectedTags.includes(t);
+                    return `<label class="tag-pick-item" style="--th:${tagHueByName(t)}"><input type="checkbox" name="tag" value="${esc(t)}" ${on ? 'checked' : ''} hidden />${esc(t)}</label>`;
+                  }).join('')}</div>`
+                : `<span class="hint">Aucune étiquette définie. Crée-en dans <a href="#" data-go-settings>Paramètres → Étiquettes</a>.</span>`}
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact recruteur -->
+        <div class="form-section">
+          <div class="form-section-title" style="--accent: var(--purple)">👤 Contact recruteur</div>
+          <div class="form-grid">
+            <div class="field">
+              <label>Nom du recruteur</label>
+              <input class="input" name="recruteur_nom" value="${esc(c.recruteur_nom)}" />
+            </div>
+            <div class="field">
+              <label>Email du recruteur</label>
+              <input class="input" type="email" name="recruteur_email" value="${esc(c.recruteur_email)}" />
+            </div>
           </div>
         </div>
       </form>
