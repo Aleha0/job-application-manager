@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestion des candidatures</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Barre latérale -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-logo">🎯</span>
+        <span class="brand-name">Candidatures</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-ico">📊</span> Tableau de bord
+        </button>
+        <button class="nav-item" data-view="candidatures">
+          <span class="nav-ico">📋</span> Candidatures
+        </button>
+        <button class="nav-item" data-view="documents">
+          <span class="nav-ico">📁</span> Documents
+        </button>
+        <button class="nav-item" data-view="settings">
+          <span class="nav-ico">⚙️</span> Paramètres
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="sidebarStats">—</span>
+      </div>
+    </aside>
+
+    <!-- Contenu principal -->
+    <main class="main">
+      <!-- Bandeau d'alertes flash -->
+      <div id="flashZone" class="flash-zone"></div>
+
+      <!-- Vue : Tableau de bord -->
+      <section class="view" id="view-dashboard">
+        <header class="view-header">
+          <div>
+            <h1>Tableau de bord</h1>
+            <p class="muted">Vue d'ensemble de tes candidatures</p>
+          </div>
+          <button class="btn btn-primary" data-action="new-candidature">
+            + Nouvelle candidature
+          </button>
+        </header>
+
+        <div class="stat-grid" id="statGrid"></div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Candidatures récentes</h2>
+            <button class="btn btn-ghost" data-view="candidatures">Tout voir →</button>
+          </div>
+          <div id="dashboardTable"></div>
+        </div>
+      </section>
+
+      <!-- Vue : Candidatures -->
+      <section class="view hidden" id="view-candidatures">
+        <header class="view-header">
+          <div>
+            <h1>Candidatures</h1>
+            <p class="muted">Suivi détaillé de toutes tes candidatures</p>
+          </div>
+          <button class="btn btn-primary" data-action="new-candidature">
+            + Nouvelle candidature
+          </button>
+        </header>
+
+        <div class="toolbar">
+          <input
+            type="search"
+            id="searchCandidatures"
+            class="input"
+            placeholder="🔍 Rechercher (entreprise, poste, lieu...)"
+          />
+          <select id="filterStatut" class="input">
+            <option value="">Tous les statuts</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <div id="candidaturesTable"></div>
+        </div>
+      </section>
+
+      <!-- Vue : Documents -->
+      <section class="view hidden" id="view-documents">
+        <header class="view-header">
+          <div>
+            <h1>Documents</h1>
+            <p class="muted">CV, lettres de motivation et notes, classés en dossiers</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" data-action="new-folder">+ Dossier</button>
+            <button class="btn btn-secondary" data-action="new-note">+ Note texte</button>
+            <button class="btn btn-primary" data-action="upload-doc">⬆ Importer un fichier</button>
+          </div>
+        </header>
+
+        <div class="docs-layout">
+          <div class="folders-panel">
+            <h3 class="panel-title">Dossiers</h3>
+            <div id="foldersList"></div>
+          </div>
+          <div class="docs-panel">
+            <div id="docsContent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vue : Paramètres -->
+      <section class="view hidden" id="view-settings">
+        <header class="view-header">
+          <div>
+            <h1>Paramètres</h1>
+            <p class="muted">Configure le comportement de l'application</p>
+          </div>
+        </header>
+
+        <div class="card">
+          <div class="card-head"><h2>Rappels de relance</h2></div>
+          <div class="form-row">
+            <label for="setRelanceDelai">
+              Délai par défaut avant de signaler une relance
+              <span class="muted">(jours après l'envoi, si aucune date manuelle)</span>
+            </label>
+            <div class="inline">
+              <input type="number" id="setRelanceDelai" class="input input-sm" min="1" max="365" />
+              <span>jours</span>
+              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>À propos</h2></div>
+          <p class="muted">
+            Application 100% locale. Tes données sont stockées sur ton ordinateur
+            (base <code>data/gestion.db</code> et fichiers dans <code>uploads/</code>).
+            Aucune donnée n'est envoyée sur Internet.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Conteneur des modales -->
+  <div id="modalRoot"></div>
+
+  <!-- Zone de notifications toast -->
+  <div id="toastZone" class="toast-zone"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

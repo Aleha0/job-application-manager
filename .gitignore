@@ -1,0 +1,19 @@
+# Dépendances
+node_modules/
+
+# Base de données et fichiers uploadés (données personnelles)
+data/
+uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
