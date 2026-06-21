@@ -516,6 +516,27 @@ html[data-theme="dark"] .tag-pick-item:has(input:checked) {
   color: hsl(var(--th) 75% 76%);
 }
 
+/* Liste de cases à cocher en pastilles (ex: CV liés à une CVthèque) */
+.pick-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 170px; overflow-y: auto; }
+.pick-item {
+  cursor: pointer;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  background: var(--surface);
+  transition: all 0.12s;
+  user-select: none;
+}
+.pick-item:hover { border-color: var(--primary); color: var(--primary); }
+.pick-item:has(input:checked) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
 /* ===================================================================== */
 /*  Toolbar & inputs                                                     */
 /* ===================================================================== */
@@ -846,6 +867,30 @@ textarea.input { resize: vertical; min-height: 90px; font-family: inherit; }
 .doc-card .doc-name { font-weight: 600; word-break: break-word; }
 .doc-card .doc-meta { font-size: 0.78rem; color: var(--muted); }
 .doc-card .doc-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+
+/* Cartes CVthèque */
+.cvth-card .doc-ico { font-size: 1.5rem; }
+.cvth-head { display: flex; align-items: center; gap: 11px; }
+.cvth-card.cvth-todo { border-left: 3px solid var(--amber); }
+.cvth-flag {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--amber);
+  background: var(--amber-soft);
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 2px;
+}
+.cvth-flag-why { font-weight: 400; font-size: 0.72rem; opacity: 0.85; }
+.cvth-ok {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--green);
+  margin-top: 2px;
+}
 
 .section-label {
   display: flex;

@@ -107,4 +107,55 @@ if (!docCols.some((c) => c.name === 'file_date')) {
   db.exec('ALTER TABLE documents ADD COLUMN file_date TEXT');
 }
 
+// Table des CVthèques (sites où le CV est déposé). Pré-remplie à la 1re création.
+const cvthequesExisted = db
+  .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cvtheques'")
+  .get();
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cvtheques (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom            TEXT NOT NULL,
+    url            TEXT,
+    derniere_maj   TEXT,
+    cv_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    notes          TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+if (!cvthequesExisted) {
+  const ins = db.prepare('INSERT INTO cvtheques (nom, url) VALUES (?, ?)');
+  const seed = [
+    ['Indeed', 'https://www.indeed.fr'],
+    ['LinkedIn', 'https://www.linkedin.com'],
+    ['HelloWork', 'https://www.hellowork.com'],
+    ['APEC', 'https://www.apec.fr'],
+    ['France Travail', 'https://www.francetravail.fr'],
+    ['Monster', 'https://www.monster.fr'],
+  ];
+  db.transaction(() => { for (const [n, u] of seed) ins.run(n, u); })();
+}
+// Délai (mois) avant de signaler une CVthèque « à mettre à jour ».
+seedSetting.run('cvtheque_maj_delai_mois', '3');
+
+// Liaison plusieurs-à-plusieurs entre CVthèques et documents (CV).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cvtheque_cvs (
+    cvtheque_id INTEGER NOT NULL REFERENCES cvtheques(id) ON DELETE CASCADE,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    PRIMARY KEY (cvtheque_id, document_id)
+  );
+`);
+// Migration : déplace l'ancien lien unique cv_document_id vers la table de liaison.
+const cvthLegacy = db
+  .prepare('SELECT id, cv_document_id FROM cvtheques WHERE cv_document_id IS NOT NULL')
+  .all();
+if (cvthLegacy.length) {
+  const ins = db.prepare('INSERT OR IGNORE INTO cvtheque_cvs (cvtheque_id, document_id) VALUES (?, ?)');
+  const clr = db.prepare('UPDATE cvtheques SET cv_document_id = NULL WHERE id = ?');
+  db.transaction(() => {
+    for (const r of cvthLegacy) { ins.run(r.id, r.cv_document_id); clr.run(r.id); }
+  })();
+}
+
 module.exports = db;

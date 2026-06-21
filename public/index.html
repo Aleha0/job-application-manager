@@ -44,6 +44,9 @@
         <button class="nav-item" data-view="documents">
           <span class="nav-ico">📁</span> Documents
         </button>
+        <button class="nav-item" data-view="cvtheques">
+          <span class="nav-ico">🗃️</span> Mes CVthèques
+        </button>
         <button class="nav-item" data-view="settings">
           <span class="nav-ico">⚙️</span> Paramètres
         </button>
@@ -150,6 +153,18 @@
         </div>
       </section>
 
+      <!-- Vue : Mes CVthèques -->
+      <section class="view hidden" id="view-cvtheques">
+        <header class="view-header">
+          <div>
+            <h1>Mes CVthèques</h1>
+            <p class="muted">Les sites où ton CV est déposé — pour le tenir à jour partout</p>
+          </div>
+          <button class="btn btn-primary" data-action="new-cvtheque">+ Ajouter une plateforme</button>
+        </header>
+        <div id="cvthequesList"></div>
+      </section>
+
       <!-- Vue : Paramètres -->
       <section class="view hidden" id="view-settings">
         <header class="view-header">
@@ -169,6 +184,17 @@
             <div class="inline">
               <input type="number" id="setRelanceDelai" class="input input-sm" min="1" max="365" />
               <span>jours</span>
+              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
+            </div>
+          </div>
+          <div class="form-row" style="border-top:1px solid var(--border)">
+            <label for="setCvthequeDelai">
+              Signaler une CVthèque « à mettre à jour » après
+              <span class="muted">(sans mise à jour depuis ce délai)</span>
+            </label>
+            <div class="inline">
+              <input type="number" id="setCvthequeDelai" class="input input-sm" min="1" max="60" />
+              <span>mois</span>
               <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
             </div>
           </div>

@@ -287,6 +287,7 @@ function switchView(view) {
   if (view === 'candidatures') renderCandidatures();
   if (view === 'dashboard') renderDashboard();
   if (view === 'settings') renderSettings();
+  if (view === 'cvtheques') renderCvtheques();
 }
 
 /* ===================================================================== */
@@ -1304,10 +1305,148 @@ async function noteModal(id = null, candidatureId = null) {
 }
 
 /* ===================================================================== */
+/*  Vue : Mes CVthèques                                                 */
+/* ===================================================================== */
+async function renderCvtheques() {
+  const box = $('#cvthequesList');
+  if (!box) return;
+  box.innerHTML = '<span class="muted">Chargement…</span>';
+  let list;
+  try {
+    list = await api('/api/cvtheques');
+  } catch (err) {
+    box.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    return;
+  }
+  if (!list.length) {
+    box.innerHTML = emptyState('🗃️', 'Aucune plateforme', 'Ajoute les sites où ton CV est déposé.');
+    return;
+  }
+  box.innerHTML = '<div class="doc-grid">' + list.map(cvthequeCardHTML).join('') + '</div>';
+}
+
+function cvthequeCardHTML(cv) {
+  const host = (() => {
+    try { return cv.url ? new URL(cv.url).hostname.replace(/^www\./, '') : ''; } catch { return ''; }
+  })();
+  const maj = cv.derniere_maj
+    ? `🕒 Maj : ${fmtDate(cv.derniere_maj)}`
+    : '<span style="color:var(--amber)">Jamais mise à jour</span>';
+  const flag = cv.aMettreAJour
+    ? `<div class="cvth-flag" title="${esc(cv.raison)}">⚠️ À mettre à jour <span class="cvth-flag-why">${esc(cv.raison)}</span></div>`
+    : `<div class="cvth-ok">✅ À jour</div>`;
+  const cvNames = (cv.cvs || []).map((c) => c.original_name);
+  const cvLink = cvNames.length
+    ? `<div class="doc-meta">📄 CV : ${esc(cvNames.join(', '))}</div>`
+    : '<div class="doc-meta" style="color:var(--muted)">Aucun CV lié</div>';
+  const open = cv.url
+    ? `<a class="btn btn-sm btn-secondary" href="${esc(cv.url)}" target="_blank" rel="noopener">↗ Ouvrir</a>`
+    : '';
+  const notes = cv.notes ? `<div class="doc-meta">📝 ${esc(cv.notes)}</div>` : '';
+  return `
+    <div class="doc-card cvth-card ${cv.aMettreAJour ? 'cvth-todo' : ''}">
+      <div class="cvth-head">
+        <span class="doc-ico">🗃️</span>
+        <div style="flex:1;min-width:0">
+          <div class="doc-name">${esc(cv.nom)}</div>
+          ${host ? `<div class="doc-meta">${esc(host)}</div>` : ''}
+        </div>
+      </div>
+      <div class="doc-meta">${maj}</div>
+      ${cvLink}
+      ${notes}
+      ${flag}
+      <div class="doc-actions">
+        ${open}
+        <button class="btn btn-sm btn-secondary" data-cvtheque-maj="${cv.id}" title="Marquer comme mis à jour aujourd'hui">✓ Mis à jour</button>
+        <button class="btn btn-sm btn-secondary" data-open-cvtheque="${cv.id}">✏️</button>
+        <button class="btn btn-sm btn-danger" data-del-cvtheque="${cv.id}">🗑️</button>
+      </div>
+    </div>`;
+}
+
+let cvthequesCache = [];
+async function cvthequeModal(id = null) {
+  let cv = { nom: '', url: '', derniere_maj: '', cv_document_id: '', notes: '' };
+  if (id) {
+    cvthequesCache = await api('/api/cvtheques');
+    cv = cvthequesCache.find((x) => x.id === id) || cv;
+  }
+  // Documents (CV en priorité) pour le champ « CV(s) lié(s) ».
+  const docs = await api('/api/documents');
+  docs.sort((a, b) => (a.type === 'cv' ? -1 : 1) - (b.type === 'cv' ? -1 : 1));
+  const linkedIds = (cv.cvs || []).map((c) => c.id);
+  const docPicker = docs.length
+    ? `<div class="pick-list">${docs.map((d) => {
+        const on = linkedIds.includes(d.id);
+        return `<label class="pick-item"><input type="checkbox" name="cv_doc" value="${d.id}" ${on ? 'checked' : ''} hidden />${d.type === 'cv' ? '📄 ' : '📎 '}${esc(d.original_name)}</label>`;
+      }).join('')}</div>`
+    : `<span class="hint">Aucun document importé. Ajoute tes CV dans l'onglet Documents.</span>`;
+
+  openModal(`
+    <div class="modal-head"><h2>${id ? 'Modifier la plateforme' : 'Nouvelle plateforme'}</h2>
+      <button class="btn-icon" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <form id="cvthequeForm">
+        <div class="form-grid">
+          <div class="field">
+            <label>Nom *</label>
+            <input class="input" name="nom" required value="${esc(cv.nom)}" placeholder="ex: Indeed, LinkedIn…" />
+          </div>
+          <div class="field">
+            <label>Lien du site</label>
+            <input class="input" type="url" name="url" value="${esc(cv.url)}" placeholder="https://..." />
+          </div>
+          <div class="field">
+            <label>Dernière mise à jour</label>
+            <input class="input" type="date" name="derniere_maj" value="${esc((cv.derniere_maj || '').slice(0, 10))}" />
+          </div>
+          <div class="field full">
+            <label>CV déposé(s) <span class="hint">(un ou plusieurs)</span></label>
+            ${docPicker}
+          </div>
+          <div class="field full">
+            <label>Notes</label>
+            <textarea class="input" name="notes" rows="2" placeholder="identifiants, remarques…">${esc(cv.notes)}</textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-foot">
+      ${id ? `<button class="btn btn-danger" data-del-cvtheque="${id}" style="margin-right:auto">Supprimer</button>` : ''}
+      <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" id="saveCvtheque">${id ? 'Enregistrer' : 'Ajouter'}</button>
+    </div>
+  `);
+
+  $('#saveCvtheque').addEventListener('click', async () => {
+    const form = $('#cvthequeForm');
+    if (!form.reportValidity()) return;
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.cv_document_ids = [...form.querySelectorAll('input[name="cv_doc"]:checked')].map((i) => Number(i.value));
+    try {
+      if (id) {
+        await api(`/api/cvtheques/${id}`, { method: 'PUT', body: data });
+        toast('Plateforme mise à jour');
+      } else {
+        await api('/api/cvtheques', { method: 'POST', body: data });
+        toast('Plateforme ajoutée');
+      }
+      closeModal();
+      renderCvtheques();
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  });
+}
+
+/* ===================================================================== */
 /*  Vue : Paramètres                                                    */
 /* ===================================================================== */
 function renderSettings() {
   $('#setRelanceDelai').value = State.settings.relance_delai_jours || '7';
+  const cvDelai = $('#setCvthequeDelai');
+  if (cvDelai) cvDelai.value = State.settings.cvtheque_maj_delai_mois || '3';
 
   // ntfy
   const topic = State.settings.ntfy_topic || '';
@@ -1340,13 +1479,15 @@ function renderSettings() {
 async function saveSettings() {
   const delai = $('#setRelanceDelai').value;
   const ntfyTopic = ($('#setNtfyTopic')?.value || '').trim();
+  const cvDelai = $('#setCvthequeDelai')?.value || '3';
   try {
     await api('/api/settings', {
       method: 'PUT',
-      body: { relance_delai_jours: delai, ntfy_topic: ntfyTopic },
+      body: { relance_delai_jours: delai, ntfy_topic: ntfyTopic, cvtheque_maj_delai_mois: cvDelai },
     });
     State.settings.relance_delai_jours = delai;
     State.settings.ntfy_topic = ntfyTopic;
+    State.settings.cvtheque_maj_delai_mois = cvDelai;
     const hint = $('#ntfyTopicHint');
     if (hint) hint.textContent = ntfyTopic || '—';
     toast('Paramètres enregistrés');
@@ -1630,7 +1771,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit]');
+  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit],[data-open-cvtheque],[data-del-cvtheque],[data-cvtheque-maj]');
   if (!t) return;
 
   // Navigation
@@ -1643,6 +1784,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'new-folder') folderModal();
     if (a === 'new-note') noteModal();
     if (a === 'upload-doc') uploadModal();
+    if (a === 'new-cvtheque') cvthequeModal();
     if (a === 'save-settings') saveSettings();
     return;
   }
@@ -1724,6 +1866,28 @@ document.addEventListener('click', async (e) => {
   // Liens depuis la modale candidature
   if (t.dataset.linkNote) { noteModal(null, Number(t.dataset.linkNote)); return; }
   if (t.dataset.linkUpload) { uploadModal(Number(t.dataset.linkUpload)); return; }
+
+  // CVthèques
+  if (t.dataset.openCvtheque) { cvthequeModal(Number(t.dataset.openCvtheque)); return; }
+  if (t.dataset.cvthequeMaj) {
+    await api(`/api/cvtheques/${Number(t.dataset.cvthequeMaj)}`, {
+      method: 'PUT',
+      body: { derniere_maj: todayLocalISO() },
+    });
+    toast('Marquée comme mise à jour aujourd\'hui');
+    renderCvtheques();
+    return;
+  }
+  if (t.dataset.delCvtheque) {
+    const id = Number(t.dataset.delCvtheque);
+    if (confirm('Supprimer cette plateforme de la liste ?')) {
+      await api(`/api/cvtheques/${id}`, { method: 'DELETE' });
+      toast('Plateforme supprimée');
+      closeModal();
+      renderCvtheques();
+    }
+    return;
+  }
 });
 
 // Recherche & filtres

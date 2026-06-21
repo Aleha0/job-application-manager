@@ -634,6 +634,104 @@ app.delete(
 );
 
 // =========================================================================
+//  API : CVTHÈQUES (sites où le CV est déposé)
+// =========================================================================
+
+function monthsSinceISO(iso) {
+  if (!iso) return Infinity;
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return 0;
+  return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+}
+
+// Calcule si une CVthèque est à mettre à jour, et pourquoi.
+// maxCvDate = date du CV lié le plus récent (chaîne ISO, '' si aucun).
+function computeCvthequeStatus(maxCvDate, derniere_maj, delaiMois) {
+  const cvNewer = maxCvDate && (!derniere_maj || maxCvDate > derniere_maj);
+  const never = !derniere_maj;
+  const tooOld = derniere_maj && monthsSinceISO(derniere_maj) >= delaiMois;
+  let raison = '';
+  if (cvNewer) raison = 'CV plus récent disponible';
+  else if (never) raison = 'Jamais mise à jour';
+  else if (tooOld) raison = `Pas mise à jour depuis +${delaiMois} mois`;
+  return { aMettreAJour: !!(cvNewer || never || tooOld), raison };
+}
+
+// Remplace la liste des CV liés à une CVthèque.
+function setCvthequeCvs(cvthequeId, ids) {
+  db.prepare('DELETE FROM cvtheque_cvs WHERE cvtheque_id = ?').run(cvthequeId);
+  const ins = db.prepare('INSERT OR IGNORE INTO cvtheque_cvs (cvtheque_id, document_id) VALUES (?, ?)');
+  for (const id of ids || []) {
+    if (id) ins.run(cvthequeId, Number(id));
+  }
+}
+
+app.get(
+  '/api/cvtheques',
+  asyncRoute((req, res) => {
+    const delaiMois = parseInt(getSetting('cvtheque_maj_delai_mois', '3'), 10);
+    const rows = db.prepare('SELECT * FROM cvtheques ORDER BY nom COLLATE NOCASE').all();
+    const cvsStmt = db.prepare(`
+      SELECT d.id, d.original_name, d.file_date, d.type
+      FROM cvtheque_cvs j JOIN documents d ON d.id = j.document_id
+      WHERE j.cvtheque_id = ?
+      ORDER BY d.original_name COLLATE NOCASE
+    `);
+    res.json(
+      rows.map((r) => {
+        const cvs = cvsStmt.all(r.id);
+        const maxCvDate = cvs.reduce((m, d) => (d.file_date && d.file_date > m ? d.file_date : m), '');
+        return { ...r, cvs, ...computeCvthequeStatus(maxCvDate, r.derniere_maj, delaiMois) };
+      })
+    );
+  })
+);
+
+app.post(
+  '/api/cvtheques',
+  asyncRoute((req, res) => {
+    const b = req.body || {};
+    if (!b.nom) return res.status(400).json({ error: 'Le nom est requis.' });
+    const info = db
+      .prepare('INSERT INTO cvtheques (nom, url, derniere_maj, notes) VALUES (?, ?, ?, ?)')
+      .run(b.nom, b.url || null, b.derniere_maj || null, b.notes || null);
+    setCvthequeCvs(info.lastInsertRowid, b.cv_document_ids);
+    res.status(201).json(db.prepare('SELECT * FROM cvtheques WHERE id = ?').get(info.lastInsertRowid));
+  })
+);
+
+app.put(
+  '/api/cvtheques/:id',
+  asyncRoute((req, res) => {
+    const id = Number(req.params.id);
+    const existing = db.prepare('SELECT * FROM cvtheques WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'CVthèque introuvable.' });
+    const b = req.body || {};
+    db.prepare(`
+      UPDATE cvtheques SET
+        nom = ?, url = ?, derniere_maj = ?, notes = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      b.nom ?? existing.nom,
+      b.url !== undefined ? (b.url || null) : existing.url,
+      b.derniere_maj !== undefined ? (b.derniere_maj || null) : existing.derniere_maj,
+      b.notes !== undefined ? (b.notes || null) : existing.notes,
+      id
+    );
+    if (b.cv_document_ids !== undefined) setCvthequeCvs(id, b.cv_document_ids);
+    res.json(db.prepare('SELECT * FROM cvtheques WHERE id = ?').get(id));
+  })
+);
+
+app.delete(
+  '/api/cvtheques/:id',
+  asyncRoute((req, res) => {
+    db.prepare('DELETE FROM cvtheques WHERE id = ?').run(Number(req.params.id));
+    res.json({ ok: true });
+  })
+);
+
+// =========================================================================
 //  API : PARAMÈTRES
 // =========================================================================
 
