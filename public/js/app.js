@@ -449,12 +449,14 @@ async function renderStats() {
   }
 
   // Chiffres clés
+  const dr = d.delaiReponse || { jours: null, nb: 0 };
   const cards = [
     { label: 'Candidatures', value: d.total, accent: true },
     { label: 'Envoyées', value: d.funnel.envoyees },
     { label: 'Entretiens', value: d.funnel.entretiens },
     { label: 'Taux de réponse', value: d.taux.reponse + ' %' },
     { label: "Taux d'entretien", value: d.taux.entretien + ' %' },
+    { label: 'Délai moyen de réponse', value: dr.jours === null ? '—' : dr.jours + ' j' },
   ];
   const cardsHtml = cards
     .map((c) => `<div class="stat ${c.accent ? 'accent' : ''}"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`)
@@ -963,6 +965,10 @@ function candidatureModal(c = null) {
             <div class="field">
               <label>Date de relance <span class="hint">(pré-remplie, modifiable)</span></label>
               <input class="input" type="date" name="date_relance" value="${esc(valDateRelance)}" />
+            </div>
+            <div class="field">
+              <label>Date de réponse <span class="hint">(quand l'employeur répond)</span></label>
+              <input class="input" type="date" name="date_reponse" value="${esc((c.date_reponse || '').slice(0, 10))}" />
             </div>
             <div class="field full">
               <label>Étiquettes</label>

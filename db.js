@@ -112,6 +112,11 @@ if (!candCols.some((c) => c.name === 'plateforme')) {
   db.exec('ALTER TABLE candidatures ADD COLUMN plateforme TEXT');
 }
 
+// Ajoute la colonne `date_reponse` (date de réponse de l'employeur).
+if (!candCols.some((c) => c.name === 'date_reponse')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN date_reponse TEXT');
+}
+
 // Migration unique : ajoute « En physique » et « Par e-mail » aux plateformes
 // existantes (remplace l'ancien « En personne »). Ne s'exécute qu'une fois.
 const migPlatDone = db.prepare("SELECT value FROM settings WHERE key = 'migr_plat_spontane'").get();

@@ -167,10 +167,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, tags)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, tags)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @tags)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @tags)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -185,6 +185,7 @@ app.post(
       salaire: b.salaire || null,
       type_contrat: b.type_contrat || null,
       plateforme: b.plateforme || null,
+      date_reponse: b.date_reponse || null,
       tags: normalizeTags(b.tags),
     });
     const row = db
@@ -216,6 +217,7 @@ app.put(
         salaire = @salaire,
         type_contrat = @type_contrat,
         plateforme = @plateforme,
+        date_reponse = @date_reponse,
         tags = @tags,
         updated_at = datetime('now')
       WHERE id = @id
@@ -233,6 +235,7 @@ app.put(
       salaire: b.salaire ?? existing.salaire,
       type_contrat: b.type_contrat ?? existing.type_contrat,
       plateforme: b.plateforme !== undefined ? (b.plateforme || null) : existing.plateforme,
+      date_reponse: b.date_reponse !== undefined ? (b.date_reponse || null) : existing.date_reponse,
       tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
@@ -304,7 +307,7 @@ function lastNMonths(n) {
 app.get(
   '/api/stats/charts',
   asyncRoute((req, res) => {
-    const rows = db.prepare('SELECT statut, date_candidature, plateforme, lieu FROM candidatures').all();
+    const rows = db.prepare('SELECT statut, date_candidature, date_reponse, plateforme, lieu FROM candidatures').all();
     const total = rows.length;
 
     const parStatut = {};
@@ -362,6 +365,17 @@ app.get(
     }
     const objectifHebdo = parseInt(getSetting('objectif_hebdo', '5'), 10) || 5;
 
+    // Délai moyen de réponse (jours entre candidature et date de réponse).
+    let sumDelai = 0;
+    let nbReponses = 0;
+    for (const r of rows) {
+      if (r.date_candidature && r.date_reponse) {
+        const j = daysBetween(r.date_candidature, r.date_reponse);
+        if (j >= 0) { sumDelai += j; nbReponses++; }
+      }
+    }
+    const delaiReponse = { jours: nbReponses > 0 ? Math.round(sumDelai / nbReponses) : null, nb: nbReponses };
+
     const envoyees = total - g('À postuler');
     const entretiens = g('Entretien') + g('Acceptée');
     const acceptees = g('Acceptée');
@@ -376,6 +390,7 @@ app.get(
       parLieu,
       activite: { actives, cloturees },
       rythme: { semaine, mois: moisCourant, objectif: objectifHebdo },
+      delaiReponse,
       funnel: { envoyees, entretiens, acceptees },
       taux: {
         reponse: pct(reponses, envoyees),
