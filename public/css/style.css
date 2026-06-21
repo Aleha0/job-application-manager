@@ -326,6 +326,54 @@ tbody tr:hover { background: var(--surface-2); }
   color: var(--text-soft);
 }
 
+/* --- Étiquettes (tags) --- */
+.tagchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+
+/* Sélecteur d'étiquettes dans le formulaire (cases stylées en pastilles) */
+.tag-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-pick-item {
+  cursor: pointer;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  background: var(--surface);
+  transition: all 0.12s;
+  user-select: none;
+}
+.tag-pick-item:hover { border-color: var(--primary); color: var(--primary); }
+.tag-pick-item:has(input:checked) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Gestion des étiquettes dans les Paramètres */
+.tag-manage { display: flex; flex-wrap: wrap; gap: 8px; }
+.tagchip .tag-x {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.7rem;
+  opacity: 0.6;
+  padding: 0;
+  line-height: 1;
+}
+.tagchip .tag-x:hover { opacity: 1; }
+
 /* ===================================================================== */
 /*  Toolbar & inputs                                                     */
 /* ===================================================================== */

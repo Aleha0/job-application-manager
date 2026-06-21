@@ -85,6 +85,28 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// --- Étiquettes -----------------------------------------------------------
+
+function parseTags(s) {
+  try {
+    const a = JSON.parse(s || '[]');
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// Normalise une entrée de tags (tableau ou chaîne) en JSON string dédupliqué.
+function normalizeTags(t) {
+  let arr = t;
+  if (typeof t === 'string') {
+    try { arr = JSON.parse(t); } catch { arr = t.split(','); }
+  }
+  if (!Array.isArray(arr)) return '[]';
+  const clean = [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))];
+  return JSON.stringify(clean);
+}
+
 function daysBetween(fromISO, toISO) {
   const a = new Date(fromISO + 'T00:00:00');
   const b = new Date(toISO + 'T00:00:00');
@@ -124,7 +146,11 @@ app.get(
       .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
       .all();
     const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
-    const enriched = rows.map((c) => ({ ...c, relance: computeRelance(c, delai) }));
+    const enriched = rows.map((c) => ({
+      ...c,
+      tags: parseTags(c.tags),
+      relance: computeRelance(c, delai),
+    }));
     res.json(enriched);
   })
 );
@@ -140,10 +166,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, tags)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @tags)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -157,6 +183,7 @@ app.post(
       lien_offre: b.lien_offre || null,
       salaire: b.salaire || null,
       type_contrat: b.type_contrat || null,
+      tags: normalizeTags(b.tags),
     });
     const row = db
       .prepare('SELECT * FROM candidatures WHERE id = ?')
@@ -186,6 +213,7 @@ app.put(
         lien_offre = @lien_offre,
         salaire = @salaire,
         type_contrat = @type_contrat,
+        tags = @tags,
         updated_at = datetime('now')
       WHERE id = @id
     `).run({
@@ -201,6 +229,7 @@ app.put(
       lien_offre: b.lien_offre ?? existing.lien_offre,
       salaire: b.salaire ?? existing.salaire,
       type_contrat: b.type_contrat ?? existing.type_contrat,
+      tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
     res.json(row);

@@ -82,5 +82,15 @@ seedSetting.run('relance_delai_jours', '7');
 // Notifications ntfy (téléphone). Sujet vide = désactivé.
 seedSetting.run('ntfy_topic', '');
 seedSetting.run('ntfy_server', 'https://ntfy.sh');
+// Liste d'étiquettes prédéfinies (modifiable dans les Paramètres).
+seedSetting.run('tags', JSON.stringify(['Télétravail', 'Priorité haute', 'Spontanée', 'Réseau', 'Alternance']));
+
+// --- Migrations légères ---------------------------------------------------
+
+// Ajoute la colonne `tags` aux candidatures si elle n'existe pas encore.
+const candCols = db.prepare('PRAGMA table_info(candidatures)').all();
+if (!candCols.some((c) => c.name === 'tags')) {
+  db.exec("ALTER TABLE candidatures ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+}
 
 module.exports = db;

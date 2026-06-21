@@ -23,6 +23,8 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Mode sombre** 🌙 : thème clair/sombre, mémorisé entre les sessions.
 - **Notifications de relance** : sur ton téléphone (via ntfy) et/ou sur ton PC
   (notifications du navigateur).
+- **Étiquettes** 🏷️ : liste d'étiquettes personnalisable (Paramètres), assignables
+  à chaque candidature et utilisables comme filtre dans le tableau.
 
 ## ✨ Remplissage automatique depuis une offre d'emploi
 

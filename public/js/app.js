@@ -30,6 +30,7 @@ const State = {
   settings: {},
   currentFolder: 'all',     // 'all' | 'none' | folderId
   filterStatut: '',         // '' = tous, sinon un statut
+  filterTag: '',            // '' = toutes, sinon une étiquette
   aiAvailable: false,       // IA d'extraction activée (clé API présente)
   view: 'dashboard',
 };
@@ -91,6 +92,32 @@ function fmtSize(bytes) {
 function statutBadge(statut) {
   const cls = STATUT_CLASS[statut] || 's-apostuler';
   return `<span class="badge ${cls}">${esc(statut)}</span>`;
+}
+
+// --- Étiquettes (tags) ---
+function getPredefinedTags() {
+  try {
+    const a = JSON.parse(State.settings.tags || '[]');
+    return Array.isArray(a) ? a : [];
+  } catch {
+    return [];
+  }
+}
+
+// Couleur déterministe (teinte HSL) à partir du nom du tag.
+function tagHue(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+
+function tagChip(name, withDelete = false) {
+  const h = tagHue(name);
+  const style = `background:hsla(${h},65%,50%,0.16);color:hsl(${h},60%,52%)`;
+  const del = withDelete
+    ? `<button class="tag-x" data-del-tag="${esc(name)}" title="Supprimer">✕</button>`
+    : '';
+  return `<span class="tagchip" style="${style}">${esc(name)}${del}</span>`;
 }
 
 // Date du jour (locale) au format YYYY-MM-DD, pour les champs <input type="date">.
@@ -285,11 +312,24 @@ function renderStatutChips() {
   box.innerHTML = html;
 }
 
+// Remplit le sélecteur de filtre par étiquette.
+function renderTagFilter() {
+  const sel = $('#filterTag');
+  if (!sel) return;
+  const tags = getPredefinedTags();
+  sel.innerHTML =
+    '<option value="">Toutes les étiquettes</option>' +
+    tags.map((t) => `<option value="${esc(t)}" ${State.filterTag === t ? 'selected' : ''}>${esc(t)}</option>`).join('');
+  sel.classList.toggle('hidden', tags.length === 0);
+}
+
 function getFilteredCandidatures() {
   const q = ($('#searchCandidatures')?.value || '').toLowerCase().trim();
   const statut = State.filterStatut;
+  const tag = State.filterTag;
   return State.candidatures.filter((c) => {
     if (statut && c.statut !== statut) return false;
+    if (tag && !(Array.isArray(c.tags) && c.tags.includes(tag))) return false;
     if (q) {
       const hay = `${c.entreprise} ${c.poste} ${c.lieu || ''} ${c.recruteur_nom || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -300,6 +340,7 @@ function getFilteredCandidatures() {
 
 function renderCandidatures() {
   renderStatutChips();
+  renderTagFilter();
 
   // Bouton "effacer" de la recherche.
   const q = $('#searchCandidatures')?.value || '';
@@ -337,11 +378,15 @@ function candidaturesTableHTML(list, compact) {
       const lien = c.lien_offre
         ? `<a class="link-ext" href="${esc(c.lien_offre)}" target="_blank" rel="noopener">offre ↗</a>`
         : '';
+      const tags = (!compact && Array.isArray(c.tags) && c.tags.length)
+        ? `<div class="tag-row">${c.tags.map((t) => tagChip(t)).join('')}</div>`
+        : '';
       return `
         <tr data-open-candidature="${c.id}" style="cursor:pointer">
           <td>
             <div class="cell-strong">${esc(c.entreprise)}</div>
             <div class="cell-sub">${esc(c.poste)} ${lien}</div>
+            ${tags}
           </td>
           <td>${statutBadge(c.statut)}</td>
           ${compact ? '' : `<td>${esc(c.lieu || '—')} ${contrat}</td>`}
@@ -395,6 +440,9 @@ function candidatureModal(c = null) {
   const today = todayLocalISO();
   const valDateCand = isEdit ? (c.date_candidature || '').slice(0, 10) : today;
   const valDateRelance = isEdit ? (c.date_relance || '').slice(0, 10) : addDaysISO(today, delai);
+
+  const predefTags = getPredefinedTags();
+  const selectedTags = Array.isArray(c.tags) ? c.tags : [];
 
   const statutOptions = State.statuts
     .map((s) => `<option value="${esc(s)}" ${c.statut === s ? 'selected' : ''}>${esc(s)}</option>`)
@@ -468,6 +516,15 @@ function candidatureModal(c = null) {
               </div>
             </div>
           </div>
+          <div class="field full">
+            <label>Étiquettes</label>
+            ${predefTags.length
+              ? `<div class="tag-pick">${predefTags.map((t) => {
+                  const on = selectedTags.includes(t);
+                  return `<label class="tag-pick-item"><input type="checkbox" name="tag" value="${esc(t)}" ${on ? 'checked' : ''} hidden />${esc(t)}</label>`;
+                }).join('')}</div>`
+              : `<span class="hint">Aucune étiquette définie. Crée-en dans <a href="#" data-go-settings>Paramètres → Étiquettes</a>.</span>`}
+          </div>
         </div>
       </form>
 
@@ -486,6 +543,7 @@ function candidatureModal(c = null) {
     const form = $('#candidatureForm');
     if (!form.reportValidity()) return;
     const data = Object.fromEntries(new FormData(form).entries());
+    data.tags = [...form.querySelectorAll('input[name="tag"]:checked')].map((i) => i.value);
     try {
       if (isEdit) {
         await api(`/api/candidatures/${c.id}`, { method: 'PUT', body: data });
@@ -998,6 +1056,9 @@ function renderSettings() {
   // Statut des notifications navigateur
   updateBrowserNotifStatus();
 
+  // Gestion des étiquettes
+  renderTagsManager();
+
   const badge = $('#aiStatusBadge');
   if (badge) {
     if (State.aiAvailable) {
@@ -1134,6 +1195,56 @@ async function testNtfy() {
   }
 }
 
+/* ===================================================================== */
+/*  Gestion de la liste d'étiquettes (Paramètres)                       */
+/* ===================================================================== */
+function renderTagsManager() {
+  const box = $('#tagsManager');
+  if (!box) return;
+  const tags = getPredefinedTags();
+  box.innerHTML = tags.length
+    ? tags.map((t) => tagChip(t, true)).join('')
+    : '<span class="muted">Aucune étiquette pour le moment.</span>';
+}
+
+async function saveTagsList(tags) {
+  await api('/api/settings', { method: 'PUT', body: { tags: JSON.stringify(tags) } });
+  State.settings.tags = JSON.stringify(tags);
+  renderTagsManager();
+  renderTagFilter();
+}
+
+async function addTagFromInput() {
+  const input = $('#newTagInput');
+  if (!input) return;
+  const name = input.value.trim().replace(/,/g, '');
+  if (!name) return;
+  const tags = getPredefinedTags();
+  if (tags.some((t) => t.toLowerCase() === name.toLowerCase())) {
+    toast('Cette étiquette existe déjà', 'err');
+    return;
+  }
+  tags.push(name);
+  input.value = '';
+  try {
+    await saveTagsList(tags);
+    toast('Étiquette ajoutée');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+async function removeTag(name) {
+  const tags = getPredefinedTags().filter((t) => t !== name);
+  try {
+    await saveTagsList(tags);
+    if (State.filterTag === name) { State.filterTag = ''; }
+    toast('Étiquette supprimée');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
 // Branche les contrôles statiques (présents dès le chargement).
 function setupStaticControls() {
   $('#themeToggle')?.addEventListener('click', toggleTheme);
@@ -1142,6 +1253,14 @@ function setupStaticControls() {
   $('#btnNtfyGenerate')?.addEventListener('click', () => {
     const input = $('#setNtfyTopic');
     if (input) input.value = randomTopic();
+  });
+  $('#btnAddTag')?.addEventListener('click', addTagFromInput);
+  $('#newTagInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addTagFromInput(); }
+  });
+  $('#tagsManager')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del-tag]');
+    if (b) removeTag(b.dataset.delTag);
   });
 }
 
@@ -1174,6 +1293,14 @@ document.addEventListener('click', async (e) => {
   if (chipBtn) {
     State.filterStatut = chipBtn.dataset.statutChip;
     renderCandidatures();
+    return;
+  }
+
+  // Lien "Paramètres → Étiquettes" depuis la modale candidature
+  if (e.target.closest('[data-go-settings]')) {
+    e.preventDefault();
+    closeModal();
+    switchView('settings');
     return;
   }
 
@@ -1276,6 +1403,12 @@ document.addEventListener('click', async (e) => {
 // Recherche & filtres
 document.addEventListener('input', (e) => {
   if (e.target.id === 'searchCandidatures') renderCandidatures();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'filterTag') {
+    State.filterTag = e.target.value;
+    renderCandidatures();
+  }
 });
 
 /* ===================================================================== */

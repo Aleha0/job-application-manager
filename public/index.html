@@ -103,6 +103,7 @@
             <button class="filter-search-clear hidden" id="searchClear" title="Effacer">✕</button>
           </div>
           <div class="filter-chips" id="statutChips"></div>
+          <select id="filterTag" class="input hidden" style="max-width:240px"></select>
         </div>
 
         <div class="card">
@@ -194,6 +195,22 @@
             <div class="inline">
               <button class="btn btn-secondary" id="btnBrowserNotif" type="button">Activer les notifications navigateur</button>
               <span id="browserNotifStatus" class="muted"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Étiquettes</h2></div>
+          <div class="form-row">
+            <p class="muted" style="margin-bottom:10px">
+              Ta liste d'étiquettes, assignables à chaque candidature et utilisables
+              comme filtre.
+            </p>
+            <div id="tagsManager" class="tag-manage"></div>
+            <div class="inline" style="margin-top:12px">
+              <input id="newTagInput" class="input" style="max-width:240px"
+                placeholder="Nouvelle étiquette" maxlength="30" />
+              <button class="btn btn-secondary" id="btnAddTag" type="button">+ Ajouter</button>
             </div>
           </div>
         </div>
