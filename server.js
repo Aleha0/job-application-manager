@@ -304,16 +304,25 @@ function lastNMonths(n) {
 app.get(
   '/api/stats/charts',
   asyncRoute((req, res) => {
-    const rows = db.prepare('SELECT statut, date_candidature, plateforme FROM candidatures').all();
+    const rows = db.prepare('SELECT statut, date_candidature, plateforme, lieu FROM candidatures').all();
     const total = rows.length;
 
     const parStatut = {};
     for (const s of STATUTS) parStatut[s] = 0;
     const platMap = {};
+    const platStats = {}; // nom -> { total, entretiens }
+    const lieuMap = {};
     const moisMap = {};
+    const estEntretien = (s) => s === 'Entretien' || s === 'Acceptée';
     for (const r of rows) {
       parStatut[r.statut] = (parStatut[r.statut] || 0) + 1;
-      if (r.plateforme) platMap[r.plateforme] = (platMap[r.plateforme] || 0) + 1;
+      if (r.plateforme) {
+        platMap[r.plateforme] = (platMap[r.plateforme] || 0) + 1;
+        const ps = platStats[r.plateforme] || (platStats[r.plateforme] = { total: 0, entretiens: 0 });
+        ps.total++;
+        if (estEntretien(r.statut)) ps.entretiens++;
+      }
+      if (r.lieu) lieuMap[r.lieu] = (lieuMap[r.lieu] || 0) + 1;
       const m = (r.date_candidature || '').slice(0, 7);
       if (m) moisMap[m] = (moisMap[m] || 0) + 1;
     }
@@ -324,17 +333,33 @@ app.get(
       .sort((a, b) => b.count - a.count);
 
     const g = (s) => parStatut[s] || 0;
+    const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+    const parPlateformeTaux = Object.entries(platStats)
+      .map(([nom, o]) => ({ nom, total: o.total, entretiens: o.entretiens, taux: pct(o.entretiens, o.total) }))
+      .sort((a, b) => b.taux - a.taux || b.total - a.total);
+
+    const parLieu = Object.entries(lieuMap)
+      .map(([nom, count]) => ({ nom, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const cloturees = g('Acceptée') + g('Refusée') + g('Sans réponse');
+    const actives = total - cloturees;
+
     const envoyees = total - g('À postuler');
     const entretiens = g('Entretien') + g('Acceptée');
     const acceptees = g('Acceptée');
     const reponses = g('Entretien') + g('Acceptée') + g('Refusée') + g('En réserve');
-    const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
 
     res.json({
       total,
       parStatut,
       mois,
       parPlateforme,
+      parPlateformeTaux,
+      parLieu,
+      activite: { actives, cloturees },
       funnel: { envoyees, entretiens, acceptees },
       taux: {
         reponse: pct(reponses, envoyees),

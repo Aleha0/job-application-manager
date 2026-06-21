@@ -495,6 +495,32 @@ async function renderStats() {
     ? d.parPlateforme.map((p) => hbar(p.nom, p.count, maxPlat, '--primary')).join('')
     : '<span class="muted">Aucune plateforme renseignée sur tes candidatures.</span>';
 
+  // Taux d'entretien par plateforme (largeur = taux %)
+  const tauxPlatHtml = (d.parPlateformeTaux || []).length
+    ? d.parPlateformeTaux
+        .map(
+          (p) => `
+        <div class="hbar-row" title="${p.entretiens}/${p.total} entretiens">
+          <div class="hbar-lbl">${esc(p.nom)}</div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:${p.taux}%;background:var(--amber)"></div></div>
+          <div class="hbar-val">${p.taux}%</div>
+        </div>`
+        )
+        .join('')
+    : '<span class="muted">Aucune plateforme renseignée.</span>';
+
+  // Par lieu
+  const maxLieu = Math.max(1, ...(d.parLieu || []).map((l) => l.count));
+  const lieuHtml = (d.parLieu || []).length
+    ? d.parLieu.map((l) => hbar(l.nom, l.count, maxLieu, '--blue')).join('')
+    : '<span class="muted">Aucun lieu renseigné.</span>';
+
+  // Actives vs clôturées
+  const act = d.activite || { actives: 0, cloturees: 0 };
+  const actHtml =
+    hbar('Actives', act.actives, d.total, '--blue') +
+    hbar('Clôturées', act.cloturees, d.total, '--gray');
+
   box.innerHTML = `
     <div class="stat-grid">${cardsHtml}</div>
 
@@ -518,8 +544,26 @@ async function renderStats() {
       </div>
 
       <div class="card">
+        <div class="card-head"><h2>Activité</h2></div>
+        <div class="card-body">
+          ${actHtml}
+          <p class="muted" style="margin-top:10px">Actives = en cours · Clôturées = acceptée / refusée / sans réponse.</p>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><h2>Par plateforme</h2></div>
         <div class="card-body">${platHtml}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Taux d'entretien par plateforme</h2></div>
+        <div class="card-body">${tauxPlatHtml}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Par lieu</h2></div>
+        <div class="card-body">${lieuHtml}</div>
       </div>
     </div>`;
 }
