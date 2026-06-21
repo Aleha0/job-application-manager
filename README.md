@@ -25,7 +25,8 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Mes CVthèques** 🗃️ : liste des plateformes où ton CV est déposé (Indeed,
   LinkedIn, APEC, France Travail…), avec date de dernière mise à jour, CV lié et un
   repère **« à mettre à jour »** (si un CV plus récent existe, ou si la mise à jour
-  date de plus de X mois — configurable).
+  date de plus de X mois — configurable). Chaque document indique aussi **sur quelles
+  plateformes il est déposé**, et signale les CV présents sur **aucune** plateforme.
 - **Remplissage auto depuis l'offre** : colle le lien d'une offre et l'app
   pré-remplit les champs (entreprise, poste, lieu, salaire, contrat…).
 - **Mode sombre** 🌙 : thème clair/sombre, mémorisé entre les sessions.

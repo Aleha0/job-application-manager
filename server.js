@@ -431,7 +431,10 @@ app.get(
     const { folder_id, candidature_id } = req.query;
     let sql = `
       SELECT d.*, f.nom AS folder_nom, c.entreprise AS candidature_entreprise,
-             c.poste AS candidature_poste
+             c.poste AS candidature_poste,
+             (SELECT GROUP_CONCAT(cv.nom, '||')
+                FROM cvtheque_cvs j JOIN cvtheques cv ON cv.id = j.cvtheque_id
+               WHERE j.document_id = d.id) AS cvtheques_noms
       FROM documents d
       LEFT JOIN folders f ON f.id = d.folder_id
       LEFT JOIN candidatures c ON c.id = d.candidature_id
@@ -450,7 +453,11 @@ app.get(
     }
     if (where.length) sql += ' WHERE ' + where.join(' AND ');
     sql += ' ORDER BY d.created_at DESC';
-    res.json(db.prepare(sql).all(...params));
+    const rows = db.prepare(sql).all(...params).map((d) => ({
+      ...d,
+      cvtheques: d.cvtheques_noms ? d.cvtheques_noms.split('||') : [],
+    }));
+    res.json(rows);
   })
 );
 

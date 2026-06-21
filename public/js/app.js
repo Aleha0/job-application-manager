@@ -1005,6 +1005,18 @@ function fileDateBadge(d) {
   return `<div class="doc-meta">🕒 Maj : ${fmtDate(d.file_date)}${warn}</div>`;
 }
 
+// Indicateur des plateformes (CVthèques) où le document est déposé.
+function coverageBadge(d) {
+  const list = Array.isArray(d.cvtheques) ? d.cvtheques : [];
+  if (list.length) {
+    return `<div class="doc-meta" style="color:var(--teal)">🗃️ Sur : ${esc(list.join(', '))}</div>`;
+  }
+  if (d.type === 'cv') {
+    return `<div class="doc-meta" style="color:var(--amber)">🗃️ Sur aucune plateforme</div>`;
+  }
+  return '';
+}
+
 function docCardHTML(d) {
   const ico = FOLDER_TYPE[d.type]?.ico || '📄';
   const link = d.candidature_id
@@ -1016,6 +1028,7 @@ function docCardHTML(d) {
       <div class="doc-name">${esc(d.original_name)}</div>
       <div class="doc-meta">${FOLDER_TYPE[d.type]?.label || 'Fichier'} · ${fmtSize(d.size)}</div>
       ${fileDateBadge(d)}
+      ${coverageBadge(d)}
       ${link}
       <div class="doc-actions">
         <a class="btn btn-sm btn-secondary" href="/api/documents/${d.id}/view" target="_blank">👁️ Voir</a>
