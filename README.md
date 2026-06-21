@@ -8,7 +8,7 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 ## ✨ Fonctionnalités
 
 - **Tableau de suivi** des candidatures (entreprise, poste, lieu, statut, salaire,
-  type de contrat, **plateforme de candidature**, recruteur, lien vers l'offre, dates).
+  type de contrat, **plateforme**, **domaine métier**, recruteur, lien vers l'offre, dates).
 - **Statuts** : À postuler → Envoyée → Relancée → Entretien → Acceptée / Refusée,
   ainsi que « En réserve » (candidature « on vous recontactera au besoin » —
   relançable périodiquement) et « Sans réponse » si tu ne souhaites pas relancer.

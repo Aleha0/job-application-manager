@@ -88,6 +88,12 @@ seedSetting.run('plateformes', JSON.stringify([
   'France Travail', "Site de l'entreprise", 'Cooptation',
   'En physique', 'Par e-mail',
 ]));
+// Liste des domaines métier (modifiable dans les Paramètres).
+seedSetting.run('domaines', JSON.stringify([
+  "Développement d'applications", 'Vente / Commerce', 'Marketing', 'Communication',
+  'Administratif', 'Comptabilité / Finance', 'Ressources humaines',
+  'Logistique', 'Restauration / Hôtellerie', 'Santé', 'Enseignement', 'Autre',
+]));
 // Liste d'étiquettes prédéfinies (modifiable dans les Paramètres).
 // Format : [{ name, hue }]. Les anciens formats (tableau de chaînes) restent
 // pris en charge côté frontend.
@@ -120,6 +126,11 @@ if (!candCols.some((c) => c.name === 'date_reponse')) {
 // Ajoute la colonne `cv_document_id` (CV envoyé) aux candidatures.
 if (!candCols.some((c) => c.name === 'cv_document_id')) {
   db.exec('ALTER TABLE candidatures ADD COLUMN cv_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL');
+}
+
+// Ajoute la colonne `domaine` (domaine métier) aux candidatures.
+if (!candCols.some((c) => c.name === 'domaine')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN domaine TEXT');
 }
 
 // Migration unique : ajoute « En physique » et « Par e-mail » aux plateformes

@@ -146,6 +146,16 @@ function getPlateformes() {
   }
 }
 
+// Liste des domaines métier (modifiable dans les Paramètres).
+function getDomaines() {
+  try {
+    const a = JSON.parse(State.settings.domaines || '[]');
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function tagHueByName(name) {
   const d = getTagDefs().find((x) => x.name === name);
   return d ? d.hue : tagHue(name);
@@ -521,6 +531,12 @@ async function renderStats() {
     ? d.parLieu.map((l) => hbar(l.nom, l.count, maxLieu, '--blue')).join('')
     : '<span class="muted">Aucun lieu renseigné.</span>';
 
+  // Par domaine métier
+  const maxDom = Math.max(1, ...(d.parDomaine || []).map((x) => x.count));
+  const domHtml = (d.parDomaine || []).length
+    ? d.parDomaine.map((x) => hbar(x.nom, x.count, maxDom, '--purple')).join('')
+    : '<span class="muted">Renseigne le « Domaine métier » sur tes candidatures.</span>';
+
   // Actives vs clôturées
   const act = d.activite || { actives: 0, cloturees: 0 };
   const actHtml =
@@ -595,6 +611,11 @@ async function renderStats() {
       <div class="card">
         <div class="card-head"><h2>Par lieu</h2></div>
         <div class="card-body">${lieuHtml}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Répartition par domaine</h2></div>
+        <div class="card-body">${domHtml}</div>
       </div>
     </div>`;
 }
@@ -902,6 +923,11 @@ async function candidatureModal(c = null) {
     getPlateformes()
       .map((p) => `<option value="${esc(p)}" ${c.plateforme === p ? 'selected' : ''}>${esc(p)}</option>`)
       .join('');
+  const domaineOptions =
+    `<option value="">—</option>` +
+    getDomaines()
+      .map((dm) => `<option value="${esc(dm)}" ${c.domaine === dm ? 'selected' : ''}>${esc(dm)}</option>`)
+      .join('');
 
   // Liste des documents (CV en premier) pour le champ « CV envoyé ».
   let docsForCv = [];
@@ -957,6 +983,10 @@ async function candidatureModal(c = null) {
             <div class="field">
               <label>Type de contrat</label>
               <select class="input" name="type_contrat">${contratOptions}</select>
+            </div>
+            <div class="field">
+              <label>Domaine métier</label>
+              <select class="input" name="domaine">${domaineOptions}</select>
             </div>
             <div class="field">
               <label>Salaire proposé</label>
@@ -1736,6 +1766,9 @@ function renderSettings() {
   // Gestion des plateformes de candidature
   renderPlatManager();
 
+  // Gestion des domaines métier
+  renderDomManager();
+
   // À propos : version + compteurs
   api('/api/about').then((a) => {
     const v = $('#aboutVersion');
@@ -2031,6 +2064,105 @@ async function removePlat(name) {
   }
 }
 
+/* --- Domaines métier (Paramètres) --- */
+function renderDomManager() {
+  const box = $('#domManager');
+  if (!box) return;
+  const doms = getDomaines();
+  box.innerHTML = doms.length
+    ? doms
+        .map(
+          (dm) =>
+            `<span class="tagchip" style="--th:268">${esc(dm)}` +
+            `<button class="tag-x" data-edit-dom="${esc(dm)}" title="Renommer">✎</button>` +
+            `<button class="tag-x" data-del-dom="${esc(dm)}" title="Supprimer">✕</button></span>`
+        )
+        .join('')
+    : '<span class="muted">Aucun domaine pour le moment.</span>';
+}
+
+async function saveDomaines(doms) {
+  await api('/api/settings', { method: 'PUT', body: { domaines: JSON.stringify(doms) } });
+  State.settings.domaines = JSON.stringify(doms);
+  renderDomManager();
+}
+
+async function addDomFromInput() {
+  const input = $('#newDomInput');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  const doms = getDomaines();
+  if (doms.some((dm) => dm.toLowerCase() === name.toLowerCase())) {
+    toast('Ce domaine existe déjà', 'err');
+    return;
+  }
+  doms.push(name);
+  input.value = '';
+  try {
+    await saveDomaines(doms);
+    toast('Domaine ajouté');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+async function removeDom(name) {
+  try {
+    await saveDomaines(getDomaines().filter((dm) => dm !== name));
+    toast('Domaine supprimé');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+// Renomme un domaine (modale stylée) et propage le changement aux candidatures.
+function renameDom(oldName) {
+  openModal(`
+    <div class="modal-head">
+      <h2>Renommer le domaine</h2>
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Nom du domaine</label>
+        <input class="input" id="renameDomInput" value="${esc(oldName)}" maxlength="40" />
+      </div>
+      <p class="muted" style="margin-top:12px">
+        Les candidatures utilisant « ${esc(oldName)} » seront automatiquement mises à jour.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" id="renameDomSave">Enregistrer</button>
+    </div>
+  `);
+
+  const input = $('#renameDomInput');
+  input?.focus();
+  input?.select();
+
+  const doSave = async () => {
+    const nt = (input?.value || '').trim();
+    if (!nt || nt === oldName) { closeModal(); return; }
+    try {
+      const r = await api('/api/domaines/rename', { method: 'POST', body: { from: oldName, to: nt } });
+      State.settings.domaines = JSON.stringify(getDomaines().map((d) => (d === oldName ? nt : d)));
+      closeModal();
+      renderDomManager();
+      await refreshCandidatures();
+      toast(`Domaine renommé — ${r.updated} candidature(s) mise(s) à jour`);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  };
+
+  $('#renameDomSave')?.addEventListener('click', doSave);
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); doSave(); }
+  });
+}
+
 // Branche les contrôles statiques (présents dès le chargement).
 function setupStaticControls() {
   $('#openSearch')?.addEventListener('click', openSearch);
@@ -2076,6 +2208,16 @@ function setupStaticControls() {
   $('#platManager')?.addEventListener('click', (e) => {
     const del = e.target.closest('[data-del-plat]');
     if (del) removePlat(del.dataset.delPlat);
+  });
+  $('#btnAddDom')?.addEventListener('click', addDomFromInput);
+  $('#newDomInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addDomFromInput(); }
+  });
+  $('#domManager')?.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-del-dom]');
+    if (del) { removeDom(del.dataset.delDom); return; }
+    const edit = e.target.closest('[data-edit-dom]');
+    if (edit) renameDom(edit.dataset.editDom);
   });
 }
 

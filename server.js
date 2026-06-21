@@ -174,10 +174,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, cv_document_id, tags)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, cv_document_id, domaine, tags)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @cv_document_id, @tags)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @cv_document_id, @domaine, @tags)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -194,6 +194,7 @@ app.post(
       plateforme: b.plateforme || null,
       date_reponse: b.date_reponse || null,
       cv_document_id: b.cv_document_id ? Number(b.cv_document_id) : null,
+      domaine: b.domaine || null,
       tags: normalizeTags(b.tags),
     });
     const row = db
@@ -227,6 +228,7 @@ app.put(
         plateforme = @plateforme,
         date_reponse = @date_reponse,
         cv_document_id = @cv_document_id,
+        domaine = @domaine,
         tags = @tags,
         updated_at = datetime('now')
       WHERE id = @id
@@ -246,6 +248,7 @@ app.put(
       plateforme: b.plateforme !== undefined ? (b.plateforme || null) : existing.plateforme,
       date_reponse: b.date_reponse !== undefined ? (b.date_reponse || null) : existing.date_reponse,
       cv_document_id: b.cv_document_id !== undefined ? (b.cv_document_id ? Number(b.cv_document_id) : null) : existing.cv_document_id,
+      domaine: b.domaine !== undefined ? (b.domaine || null) : existing.domaine,
       tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
@@ -317,7 +320,7 @@ function lastNMonths(n) {
 app.get(
   '/api/stats/charts',
   asyncRoute((req, res) => {
-    const rows = db.prepare('SELECT statut, date_candidature, date_reponse, plateforme, lieu, cv_document_id FROM candidatures').all();
+    const rows = db.prepare('SELECT statut, date_candidature, date_reponse, plateforme, lieu, cv_document_id, domaine FROM candidatures').all();
     const total = rows.length;
 
     const parStatut = {};
@@ -325,6 +328,7 @@ app.get(
     const platMap = {};
     const platStats = {}; // nom -> { total, entretiens }
     const lieuMap = {};
+    const domaineMap = {};
     const moisMap = {};
     const estEntretien = (s) => s === 'Entretien' || s === 'Acceptée';
     for (const r of rows) {
@@ -336,6 +340,7 @@ app.get(
         if (estEntretien(r.statut)) ps.entretiens++;
       }
       if (r.lieu) lieuMap[r.lieu] = (lieuMap[r.lieu] || 0) + 1;
+      if (r.domaine) domaineMap[r.domaine] = (domaineMap[r.domaine] || 0) + 1;
       const m = (r.date_candidature || '').slice(0, 7);
       if (m) moisMap[m] = (moisMap[m] || 0) + 1;
     }
@@ -356,6 +361,10 @@ app.get(
       .map(([nom, count]) => ({ nom, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
+
+    const parDomaine = Object.entries(domaineMap)
+      .map(([nom, count]) => ({ nom, count }))
+      .sort((a, b) => b.count - a.count);
 
     const cloturees = g('Acceptée') + g('Refusée') + g('Sans réponse');
     const actives = total - cloturees;
@@ -413,6 +422,7 @@ app.get(
       parPlateforme,
       parPlateformeTaux,
       parLieu,
+      parDomaine,
       activite: { actives, cloturees },
       rythme: { semaine, mois: moisCourant, objectif: objectifHebdo },
       delaiReponse,
@@ -456,7 +466,7 @@ app.get(
       .filter((c) =>
         normalizeStr(
           [c.entreprise, c.poste, c.lieu, c.recruteur_nom, c.recruteur_email,
-           c.salaire, c.type_contrat, c.statut, c.plateforme, (c.tags || []).join(' ')].join(' ')
+           c.salaire, c.type_contrat, c.statut, c.plateforme, c.domaine, (c.tags || []).join(' ')].join(' ')
         ).includes(q)
       )
       .slice(0, 25);
@@ -777,6 +787,31 @@ app.delete(
   asyncRoute((req, res) => {
     db.prepare('DELETE FROM notes WHERE id = ?').run(Number(req.params.id));
     res.json({ ok: true });
+  })
+);
+
+// Renomme un domaine métier : met à jour la liste ET les candidatures liées.
+app.post(
+  '/api/domaines/rename',
+  asyncRoute((req, res) => {
+    const from = (req.body && req.body.from ? String(req.body.from) : '').trim();
+    const to = (req.body && req.body.to ? String(req.body.to) : '').trim();
+    if (!from || !to) return res.status(400).json({ error: 'Ancien et nouveau nom requis.' });
+
+    let arr = [];
+    try { arr = JSON.parse(getSetting('domaines', '[]')); } catch { arr = []; }
+    if (!Array.isArray(arr) || !arr.includes(from)) {
+      return res.status(404).json({ error: 'Domaine introuvable.' });
+    }
+    if (arr.some((d) => d.toLowerCase() === to.toLowerCase() && d !== from)) {
+      return res.status(400).json({ error: 'Un domaine porte déjà ce nom.' });
+    }
+    arr = arr.map((d) => (d === from ? to : d));
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES ('domaines', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(JSON.stringify(arr));
+    const info = db.prepare('UPDATE candidatures SET domaine = ? WHERE domaine = ?').run(to, from);
+    res.json({ ok: true, updated: info.changes });
   })
 );
 
