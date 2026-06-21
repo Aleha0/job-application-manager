@@ -95,29 +95,52 @@ function statutBadge(statut) {
 }
 
 // --- Étiquettes (tags) ---
-function getPredefinedTags() {
-  try {
-    const a = JSON.parse(State.settings.tags || '[]');
-    return Array.isArray(a) ? a : [];
-  } catch {
-    return [];
-  }
-}
 
-// Couleur déterministe (teinte HSL) à partir du nom du tag.
+// Palette de couleurs prédéfinies (proposées à la sélection).
+const TAG_PALETTE = [
+  { hue: 231, label: 'Indigo' },
+  { hue: 199, label: 'Bleu' },
+  { hue: 160, label: 'Émeraude' },
+  { hue: 142, label: 'Vert' },
+  { hue: 35, label: 'Ambre' },
+  { hue: 18, label: 'Orange' },
+  { hue: 330, label: 'Rose' },
+  { hue: 270, label: 'Violet' },
+];
+const TAG_HUES = TAG_PALETTE.map((p) => p.hue);
+
+// Teinte de repli (déterministe) si une étiquette n'a pas de couleur définie.
 function tagHue(s) {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-  return h;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 9973;
+  return TAG_HUES[Math.abs(h) % TAG_HUES.length];
 }
 
-function tagChip(name, withDelete = false) {
-  const h = tagHue(name);
-  const style = `background:hsla(${h},65%,50%,0.16);color:hsl(${h},60%,52%)`;
-  const del = withDelete
-    ? `<button class="tag-x" data-del-tag="${esc(name)}" title="Supprimer">✕</button>`
-    : '';
-  return `<span class="tagchip" style="${style}">${esc(name)}${del}</span>`;
+// Définitions d'étiquettes [{name, hue}] — gère aussi l'ancien format (chaînes).
+function getTagDefs() {
+  let raw;
+  try { raw = JSON.parse(State.settings.tags || '[]'); } catch { raw = []; }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((t) =>
+      typeof t === 'string'
+        ? { name: t, hue: tagHue(t) }
+        : { name: String(t.name || ''), hue: Number.isFinite(t.hue) ? t.hue : tagHue(String(t.name || '')) }
+    )
+    .filter((d) => d.name);
+}
+
+function getPredefinedTags() {
+  return getTagDefs().map((d) => d.name);
+}
+
+function tagHueByName(name) {
+  const d = getTagDefs().find((x) => x.name === name);
+  return d ? d.hue : tagHue(name);
+}
+
+function tagChip(name) {
+  return `<span class="tagchip" style="--th:${tagHueByName(name)}">${esc(name)}</span>`;
 }
 
 // Date du jour (locale) au format YYYY-MM-DD, pour les champs <input type="date">.
@@ -160,8 +183,72 @@ function openModal(html, { large = false } = {}) {
     if (e.target === overlay) closeModal();
   });
   $('#modalRoot').appendChild(overlay);
+  enhanceSelects(overlay);
   document.addEventListener('keydown', escClose);
   return overlay;
+}
+
+const CHEVRON_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+// Remplace chaque <select class="input"> par un menu déroulant stylé,
+// tout en conservant le <select> (caché) pour la valeur du formulaire.
+function enhanceSelects(root) {
+  root.querySelectorAll('select.input').forEach((sel) => {
+    if (sel.dataset.enhanced) return;
+    sel.dataset.enhanced = '1';
+    sel.style.display = 'none';
+
+    const opts = [...sel.options];
+    const textOf = (v) => {
+      const o = opts.find((x) => x.value === v);
+      const t = o ? o.textContent.trim() : '';
+      return t || '—';
+    };
+
+    const wrap = document.createElement('div');
+    wrap.className = 'cselect';
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'cselect-trigger';
+    const label = document.createElement('span');
+    label.className = 'cselect-label';
+    label.textContent = textOf(sel.value);
+    const arrow = document.createElement('span');
+    arrow.className = 'cselect-arrow';
+    arrow.innerHTML = CHEVRON_SVG;
+    trigger.append(label, arrow);
+
+    const panel = document.createElement('div');
+    panel.className = 'cselect-panel';
+    opts.forEach((o) => {
+      const item = document.createElement('div');
+      item.className = 'cselect-option' + (o.value === sel.value ? ' selected' : '');
+      item.textContent = o.textContent.trim() || '—';
+      item.dataset.value = o.value;
+      item.addEventListener('click', () => {
+        sel.value = o.value;
+        label.textContent = textOf(o.value);
+        panel.querySelectorAll('.cselect-option').forEach((x) =>
+          x.classList.toggle('selected', x.dataset.value === o.value)
+        );
+        wrap.classList.remove('open');
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      panel.appendChild(item);
+    });
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.cselect.open').forEach((x) => {
+        if (x !== wrap) x.classList.remove('open');
+      });
+      wrap.classList.toggle('open');
+    });
+
+    wrap.append(trigger, panel);
+    sel.parentNode.insertBefore(wrap, sel.nextSibling);
+  });
 }
 function closeModal() {
   $('#modalRoot').innerHTML = '';
@@ -312,15 +399,21 @@ function renderStatutChips() {
   box.innerHTML = html;
 }
 
-// Remplit le sélecteur de filtre par étiquette.
-function renderTagFilter() {
-  const sel = $('#filterTag');
-  if (!sel) return;
+// Rend les pastilles de filtre par étiquette.
+function renderTagChips() {
+  const box = $('#tagChips');
+  const group = $('#tagFilterGroup');
   const tags = getPredefinedTags();
-  sel.innerHTML =
-    '<option value="">Toutes les étiquettes</option>' +
-    tags.map((t) => `<option value="${esc(t)}" ${State.filterTag === t ? 'selected' : ''}>${esc(t)}</option>`).join('');
-  sel.classList.toggle('hidden', tags.length === 0);
+  if (group) group.classList.toggle('hidden', tags.length === 0);
+  if (!box) return;
+  let html = `<button class="tagfilter tagfilter-all ${State.filterTag === '' ? 'active' : ''}" data-tag-chip="">Toutes</button>`;
+  html += tags
+    .map((t) => {
+      const active = State.filterTag === t;
+      return `<button class="tagfilter ${active ? 'active' : ''}" data-tag-chip="${esc(t)}" style="--th:${tagHueByName(t)}">${esc(t)}</button>`;
+    })
+    .join('');
+  box.innerHTML = html;
 }
 
 function getFilteredCandidatures() {
@@ -340,7 +433,7 @@ function getFilteredCandidatures() {
 
 function renderCandidatures() {
   renderStatutChips();
-  renderTagFilter();
+  renderTagChips();
 
   // Bouton "effacer" de la recherche.
   const q = $('#searchCandidatures')?.value || '';
@@ -521,7 +614,7 @@ function candidatureModal(c = null) {
             ${predefTags.length
               ? `<div class="tag-pick">${predefTags.map((t) => {
                   const on = selectedTags.includes(t);
-                  return `<label class="tag-pick-item"><input type="checkbox" name="tag" value="${esc(t)}" ${on ? 'checked' : ''} hidden />${esc(t)}</label>`;
+                  return `<label class="tag-pick-item" style="--th:${tagHueByName(t)}"><input type="checkbox" name="tag" value="${esc(t)}" ${on ? 'checked' : ''} hidden />${esc(t)}</label>`;
                 }).join('')}</div>`
               : `<span class="hint">Aucune étiquette définie. Crée-en dans <a href="#" data-go-settings>Paramètres → Étiquettes</a>.</span>`}
           </div>
@@ -1057,6 +1150,7 @@ function renderSettings() {
   updateBrowserNotifStatus();
 
   // Gestion des étiquettes
+  renderSwatches();
   renderTagsManager();
 
   const badge = $('#aiStatusBadge');
@@ -1198,20 +1292,42 @@ async function testNtfy() {
 /* ===================================================================== */
 /*  Gestion de la liste d'étiquettes (Paramètres)                       */
 /* ===================================================================== */
+// Couleur sélectionnée pour la prochaine étiquette ajoutée.
+let selectedTagHue = TAG_PALETTE[0].hue;
+
+// Rend la palette de couleurs (sélecteur à l'ajout).
+function renderSwatches() {
+  const box = $('#tagSwatches');
+  if (!box) return;
+  box.innerHTML = TAG_PALETTE.map(
+    (p) =>
+      `<button type="button" class="swatch ${selectedTagHue === p.hue ? 'active' : ''}" data-swatch="${p.hue}" title="${p.label}" style="--th:${p.hue}"></button>`
+  ).join('');
+}
+
 function renderTagsManager() {
   const box = $('#tagsManager');
   if (!box) return;
-  const tags = getPredefinedTags();
-  box.innerHTML = tags.length
-    ? tags.map((t) => tagChip(t, true)).join('')
+  const defs = getTagDefs();
+  box.innerHTML = defs.length
+    ? defs
+        .map(
+          (d) =>
+            `<span class="tagchip tagchip-edit" style="--th:${d.hue}">` +
+            `<button type="button" class="tag-color" data-recolor="${esc(d.name)}" title="Changer la couleur"></button>` +
+            `${esc(d.name)}` +
+            `<button type="button" class="tag-x" data-del-tag="${esc(d.name)}" title="Supprimer">✕</button>` +
+            `</span>`
+        )
+        .join('')
     : '<span class="muted">Aucune étiquette pour le moment.</span>';
 }
 
-async function saveTagsList(tags) {
-  await api('/api/settings', { method: 'PUT', body: { tags: JSON.stringify(tags) } });
-  State.settings.tags = JSON.stringify(tags);
+async function saveTagsList(defs) {
+  await api('/api/settings', { method: 'PUT', body: { tags: JSON.stringify(defs) } });
+  State.settings.tags = JSON.stringify(defs);
   renderTagsManager();
-  renderTagFilter();
+  renderTagChips();
 }
 
 async function addTagFromInput() {
@@ -1219,15 +1335,15 @@ async function addTagFromInput() {
   if (!input) return;
   const name = input.value.trim().replace(/,/g, '');
   if (!name) return;
-  const tags = getPredefinedTags();
-  if (tags.some((t) => t.toLowerCase() === name.toLowerCase())) {
+  const defs = getTagDefs();
+  if (defs.some((d) => d.name.toLowerCase() === name.toLowerCase())) {
     toast('Cette étiquette existe déjà', 'err');
     return;
   }
-  tags.push(name);
+  defs.push({ name, hue: selectedTagHue });
   input.value = '';
   try {
-    await saveTagsList(tags);
+    await saveTagsList(defs);
     toast('Étiquette ajoutée');
   } catch (err) {
     toast(err.message, 'err');
@@ -1235,11 +1351,25 @@ async function addTagFromInput() {
 }
 
 async function removeTag(name) {
-  const tags = getPredefinedTags().filter((t) => t !== name);
+  const defs = getTagDefs().filter((d) => d.name !== name);
   try {
-    await saveTagsList(tags);
-    if (State.filterTag === name) { State.filterTag = ''; }
+    await saveTagsList(defs);
+    if (State.filterTag === name) State.filterTag = '';
     toast('Étiquette supprimée');
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+}
+
+// Fait défiler la couleur d'une étiquette existante dans la palette.
+async function recolorTag(name) {
+  const defs = getTagDefs();
+  const d = defs.find((x) => x.name === name);
+  if (!d) return;
+  const idx = TAG_HUES.indexOf(d.hue);
+  d.hue = TAG_HUES[(idx + 1) % TAG_HUES.length];
+  try {
+    await saveTagsList(defs);
   } catch (err) {
     toast(err.message, 'err');
   }
@@ -1258,9 +1388,15 @@ function setupStaticControls() {
   $('#newTagInput')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); addTagFromInput(); }
   });
+  $('#tagSwatches')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-swatch]');
+    if (b) { selectedTagHue = Number(b.dataset.swatch); renderSwatches(); }
+  });
   $('#tagsManager')?.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-del-tag]');
-    if (b) removeTag(b.dataset.delTag);
+    const del = e.target.closest('[data-del-tag]');
+    if (del) { removeTag(del.dataset.delTag); return; }
+    const rec = e.target.closest('[data-recolor]');
+    if (rec) recolorTag(rec.dataset.recolor);
   });
 }
 
@@ -1279,6 +1415,11 @@ async function afterChange() {
 /*  Délégation d'événements (clics)                                    */
 /* ===================================================================== */
 document.addEventListener('click', async (e) => {
+  // Ferme les menus déroulants personnalisés ouverts si on clique en dehors.
+  if (!e.target.closest('.cselect')) {
+    document.querySelectorAll('.cselect.open').forEach((x) => x.classList.remove('open'));
+  }
+
   // Bouton "effacer" de la recherche
   if (e.target.closest('#searchClear')) {
     const input = $('#searchCandidatures');
@@ -1292,6 +1433,14 @@ document.addEventListener('click', async (e) => {
   const chipBtn = e.target.closest('[data-statut-chip]');
   if (chipBtn) {
     State.filterStatut = chipBtn.dataset.statutChip;
+    renderCandidatures();
+    return;
+  }
+
+  // Pastille de filtre par étiquette
+  const tagBtn = e.target.closest('[data-tag-chip]');
+  if (tagBtn) {
+    State.filterTag = tagBtn.dataset.tagChip;
     renderCandidatures();
     return;
   }
@@ -1403,12 +1552,6 @@ document.addEventListener('click', async (e) => {
 // Recherche & filtres
 document.addEventListener('input', (e) => {
   if (e.target.id === 'searchCandidatures') renderCandidatures();
-});
-document.addEventListener('change', (e) => {
-  if (e.target.id === 'filterTag') {
-    State.filterTag = e.target.value;
-    renderCandidatures();
-  }
 });
 
 /* ===================================================================== */

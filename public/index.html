@@ -102,8 +102,14 @@
             />
             <button class="filter-search-clear hidden" id="searchClear" title="Effacer">✕</button>
           </div>
-          <div class="filter-chips" id="statutChips"></div>
-          <select id="filterTag" class="input hidden" style="max-width:240px"></select>
+          <div class="filter-group">
+            <span class="filter-group-label">Statut</span>
+            <div class="filter-chips" id="statutChips"></div>
+          </div>
+          <div class="filter-group hidden" id="tagFilterGroup">
+            <span class="filter-group-label">Étiquette</span>
+            <div class="filter-chips" id="tagChips"></div>
+          </div>
         </div>
 
         <div class="card">
@@ -207,11 +213,16 @@
               comme filtre.
             </p>
             <div id="tagsManager" class="tag-manage"></div>
-            <div class="inline" style="margin-top:12px">
+            <div class="tag-add-row">
               <input id="newTagInput" class="input" style="max-width:240px"
                 placeholder="Nouvelle étiquette" maxlength="30" />
+              <div class="swatches" id="tagSwatches"></div>
               <button class="btn btn-secondary" id="btnAddTag" type="button">+ Ajouter</button>
             </div>
+            <p class="muted" style="margin-top:8px">
+              Choisis une couleur dans la palette avant d'ajouter. Pour changer la
+              couleur d'une étiquette existante, clique sur sa pastille de couleur.
+            </p>
           </div>
         </div>
 

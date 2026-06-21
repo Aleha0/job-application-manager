@@ -83,7 +83,15 @@ seedSetting.run('relance_delai_jours', '7');
 seedSetting.run('ntfy_topic', '');
 seedSetting.run('ntfy_server', 'https://ntfy.sh');
 // Liste d'étiquettes prédéfinies (modifiable dans les Paramètres).
-seedSetting.run('tags', JSON.stringify(['Télétravail', 'Priorité haute', 'Spontanée', 'Réseau', 'Alternance']));
+// Format : [{ name, hue }]. Les anciens formats (tableau de chaînes) restent
+// pris en charge côté frontend.
+seedSetting.run('tags', JSON.stringify([
+  { name: 'Télétravail', hue: 199 },
+  { name: 'Priorité haute', hue: 18 },
+  { name: 'Spontanée', hue: 270 },
+  { name: 'Réseau', hue: 160 },
+  { name: 'Alternance', hue: 35 },
+]));
 
 // --- Migrations légères ---------------------------------------------------
 

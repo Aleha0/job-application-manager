@@ -326,22 +326,91 @@ tbody tr:hover { background: var(--surface-2); }
   color: var(--text-soft);
 }
 
-/* --- Étiquettes (tags) --- */
+/* ===================================================================== */
+/*  Étiquettes (tags)                                                    */
+/* ===================================================================== */
+/* Pastille d'étiquette colorée (--th = teinte). Affichage tableau, gestion… */
 .tagchip {
+  --th: 231;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
+  gap: 6px;
+  padding: 3px 11px;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
+  background: hsl(var(--th) 70% 50% / 0.13);
+  color: hsl(var(--th) 55% 38%);
 }
-.tag-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.tagchip::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--th) 60% 48%);
+  flex-shrink: 0;
+}
+html[data-theme="dark"] .tagchip {
+  background: hsl(var(--th) 65% 58% / 0.2);
+  color: hsl(var(--th) 75% 74%);
+}
+html[data-theme="dark"] .tagchip::before { background: hsl(var(--th) 70% 64%); }
 
-/* Sélecteur d'étiquettes dans le formulaire (cases stylées en pastilles) */
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+.tagchip .tag-x {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.68rem;
+  opacity: 0.55;
+  padding: 0;
+  margin-left: 1px;
+  line-height: 1;
+}
+.tagchip .tag-x:hover { opacity: 1; }
+
+/* Gestion des étiquettes dans les Paramètres */
+.tag-manage { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag-manage .tagchip { padding: 5px 12px; font-size: 0.78rem; }
+.tagchip-edit::before { display: none; }
+.tag-color {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  border: none;
+  background: hsl(var(--th) 60% 48%);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: box-shadow 0.12s;
+}
+.tag-color:hover { box-shadow: 0 0 0 3px hsl(var(--th) 60% 48% / 0.3); }
+
+/* Sélecteur de couleur (palette) à l'ajout d'une étiquette */
+.tag-add-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+.swatch {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: hsl(var(--th) 62% 50%);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.swatch:hover { transform: scale(1.12); }
+.swatch.active {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px hsl(var(--th) 62% 50%);
+}
+
+/* Sélecteur d'étiquettes dans le formulaire (pastilles colorées cliquables) */
 .tag-pick { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag-pick-item {
+  --th: 231;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   cursor: pointer;
   padding: 6px 13px;
   border-radius: 999px;
@@ -352,27 +421,24 @@ tbody tr:hover { background: var(--surface-2); }
   transition: all 0.12s;
   user-select: none;
 }
-.tag-pick-item:hover { border-color: var(--primary); color: var(--primary); }
+.tag-pick-item::before {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--th) 60% 55%);
+  flex-shrink: 0;
+}
+.tag-pick-item:hover { border-color: hsl(var(--th) 55% 55%); }
 .tag-pick-item:has(input:checked) {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
+  background: hsl(var(--th) 70% 50% / 0.15);
+  border-color: hsl(var(--th) 55% 52%);
+  color: hsl(var(--th) 55% 40%);
   font-weight: 600;
 }
-
-/* Gestion des étiquettes dans les Paramètres */
-.tag-manage { display: flex; flex-wrap: wrap; gap: 8px; }
-.tagchip .tag-x {
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 0.7rem;
-  opacity: 0.6;
-  padding: 0;
-  line-height: 1;
+html[data-theme="dark"] .tag-pick-item:has(input:checked) {
+  background: hsl(var(--th) 65% 58% / 0.22);
+  color: hsl(var(--th) 75% 76%);
 }
-.tagchip .tag-x:hover { opacity: 1; }
 
 /* ===================================================================== */
 /*  Toolbar & inputs                                                     */
@@ -385,8 +451,71 @@ tbody tr:hover { background: var(--surface-2); }
 .filter-bar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 18px;
+}
+
+/* Groupe de filtre labellisé (Statut / Étiquette) pour ne pas confondre */
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.filter-group-label {
+  flex-shrink: 0;
+  width: 74px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* Pastilles de filtre par étiquette */
+.tagfilter {
+  --th: 231;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--th) 45% 55% / 0.4);
+  background: hsl(var(--th) 70% 50% / 0.1);
+  color: hsl(var(--th) 55% 40%);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.tagfilter::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--th) 60% 50%);
+}
+.tagfilter:hover { filter: brightness(0.97); }
+.tagfilter.active {
+  background: hsl(var(--th) 58% 47%);
+  border-color: transparent;
+  color: #fff;
+}
+.tagfilter.active::before { background: #fff; }
+html[data-theme="dark"] .tagfilter { color: hsl(var(--th) 72% 72%); }
+html[data-theme="dark"] .tagfilter.active { color: #fff; background: hsl(var(--th) 55% 52%); }
+
+/* Pastille "Toutes" neutre (filtre étiquette) */
+.tagfilter.tagfilter-all {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+}
+.tagfilter.tagfilter-all::before { display: none; }
+.tagfilter.tagfilter-all.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: transparent;
 }
 
 .filter-search {
@@ -706,7 +835,85 @@ textarea.input { resize: vertical; min-height: 90px; font-family: inherit; }
 .field.full { grid-column: 1 / -1; }
 .field label { font-weight: 500; font-size: 0.85rem; }
 .field .hint { font-size: 0.76rem; color: var(--muted); }
-select.input { cursor: pointer; }
+/* Listes déroulantes stylées (flèche custom, pas d'apparence native) */
+select.input {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%235a6275'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+select.input:hover { border-color: var(--primary); }
+html[data-theme="dark"] select.input {
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23aab2c6'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='6%209%2012%2015%2018%209'/%3E%3C/svg%3E");
+}
+select.input::-ms-expand { display: none; }
+/* Rendu de la liste ouverte (là où le navigateur l'autorise) */
+select.input option { background: var(--surface); color: var(--text); padding: 8px; }
+
+/* ===================================================================== */
+/*  Menu déroulant personnalisé (.cselect) — remplace les <select>       */
+/* ===================================================================== */
+.cselect { position: relative; width: 100%; }
+.cselect-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cselect-trigger:hover { border-color: var(--primary); }
+.cselect.open .cselect-trigger {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.cselect-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cselect-arrow { display: inline-flex; color: var(--muted); flex-shrink: 0; transition: transform 0.18s; }
+.cselect.open .cselect-arrow { transform: rotate(180deg); }
+
+.cselect-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: none;
+}
+.cselect.open .cselect-panel { display: block; animation: pop 0.12s ease; }
+.cselect-option {
+  padding: 9px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.cselect-option:hover { background: var(--surface-2); }
+.cselect-option.selected {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+}
 
 /* ===================================================================== */
 /*  Toasts                                                               */
