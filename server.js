@@ -555,7 +555,244 @@ app.put(
 
 // Métadonnées (statuts disponibles) pour le frontend.
 app.get('/api/meta', (req, res) => {
-  res.json({ statuts: STATUTS });
+  res.json({ statuts: STATUTS, aiAvailable: !!process.env.ANTHROPIC_API_KEY });
+});
+
+// =========================================================================
+//  API : EXTRACTION DEPUIS UNE OFFRE D'EMPLOI (lien ou texte)
+// =========================================================================
+
+const OFFER_KEYS = [
+  'entreprise', 'poste', 'lieu', 'salaire', 'type_contrat',
+  'recruteur_nom', 'recruteur_email',
+];
+
+function cleanVal(s) {
+  if (s == null) return '';
+  s = String(s).trim();
+  if (/^(null|n\/?a|undefined|none|-)$/i.test(s)) return '';
+  return s;
+}
+
+function decodeEntities(s) {
+  return String(s)
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return m; } })
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return m; } });
+}
+
+function htmlToText(html) {
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<\/(p|div|li|br|h[1-6]|tr)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  ).replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+}
+
+function metaContent(html, ...keys) {
+  for (const k of keys) {
+    const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`<meta[^>]+(?:property|name)=["']${esc}["'][^>]*>`, 'i');
+    const m = html.match(re);
+    if (m) {
+      const c = m[0].match(/content=["']([^"']*)["']/i);
+      if (c && c[1]) return decodeEntities(c[1]).trim();
+    }
+  }
+  return '';
+}
+
+// Extrait les blocs JSON-LD (schema.org) de la page.
+function extractJsonLd(html) {
+  const out = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    try { out.push(JSON.parse(m[1].trim())); } catch { /* ignore JSON invalide */ }
+  }
+  return out;
+}
+
+function findJobPosting(nodes) {
+  const stack = [...nodes];
+  while (stack.length) {
+    const n = stack.shift();
+    if (!n || typeof n !== 'object') continue;
+    if (Array.isArray(n)) { stack.push(...n); continue; }
+    const t = n['@type'];
+    if (t === 'JobPosting' || (Array.isArray(t) && t.includes('JobPosting'))) return n;
+    if (n['@graph']) stack.push(n['@graph']);
+  }
+  return null;
+}
+
+function formatLocation(jobLocation) {
+  let loc = jobLocation;
+  if (Array.isArray(loc)) loc = loc[0];
+  if (!loc) return '';
+  const a = loc.address || loc;
+  if (typeof a === 'string') return cleanVal(a);
+  return [a.addressLocality, a.addressRegion].map(cleanVal).filter(Boolean).join(', ');
+}
+
+function formatSalary(baseSalary) {
+  if (!baseSalary || typeof baseSalary !== 'object') return '';
+  const cur = baseSalary.currency || '';
+  const v = baseSalary.value;
+  if (!v) return '';
+  const unit = { HOUR: '/h', DAY: '/j', WEEK: '/sem', MONTH: '/mois', YEAR: '/an' }[v.unitText] || '';
+  if (v.value) return `${v.value} ${cur}${unit}`.trim();
+  if (v.minValue || v.maxValue) {
+    const range = v.minValue && v.maxValue ? `${v.minValue} - ${v.maxValue}` : (v.minValue || v.maxValue);
+    return `${range} ${cur}${unit}`.trim();
+  }
+  return '';
+}
+
+function mapContrat(et) {
+  if (Array.isArray(et)) et = et[0];
+  if (!et) return '';
+  const m = {
+    FULL_TIME: 'CDI', CONTRACTOR: 'Freelance', TEMPORARY: 'Intérim',
+    INTERN: 'Stage', PART_TIME: 'CDD',
+  };
+  return m[String(et).toUpperCase()] || '';
+}
+
+function mapJobPosting(j) {
+  const org = j.hiringOrganization;
+  return {
+    poste: cleanVal(j.title),
+    entreprise: cleanVal(org && (typeof org === 'string' ? org : org.name)),
+    lieu: formatLocation(j.jobLocation) || (j.jobLocationType === 'TELECOMMUTE' ? 'Télétravail' : ''),
+    salaire: formatSalary(j.baseSalary),
+    type_contrat: mapContrat(j.employmentType),
+  };
+}
+
+async function fetchPage(url) {
+  try {
+    const controller = new AbortController();
+    const to = setTimeout(() => controller.abort(), 12000);
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GestionCandidatures/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const ct = r.headers.get('content-type') || '';
+    if (ct && !/(text\/html|xml|text\/plain)/i.test(ct)) return null;
+    return await r.text();
+  } catch {
+    return null;
+  }
+}
+
+const OFFER_SCHEMA = {
+  type: 'object',
+  properties: {
+    entreprise: { type: 'string' },
+    poste: { type: 'string' },
+    lieu: { type: 'string' },
+    salaire: { type: 'string' },
+    type_contrat: { type: 'string' },
+    recruteur_nom: { type: 'string' },
+    recruteur_email: { type: 'string' },
+  },
+  required: OFFER_KEYS,
+  additionalProperties: false,
+};
+
+// Extraction par IA (Claude) — uniquement si une clé API est configurée.
+async function extractWithAI(text, url) {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  let mod;
+  try { mod = require('@anthropic-ai/sdk'); } catch { return null; }
+  const Anthropic = mod.default || mod;
+  const client = new Anthropic();
+  const model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-8';
+  const resp = await client.messages.create({
+    model,
+    max_tokens: 1024,
+    system:
+      "Tu extrais les informations clés d'une offre d'emploi. " +
+      "Renvoie une chaîne vide pour tout champ absent. " +
+      "Pour type_contrat, utilise exactement l'une de ces valeurs si applicable : " +
+      'CDI, CDD, Stage, Alternance, Freelance, Intérim (sinon chaîne vide).',
+    output_config: { format: { type: 'json_schema', schema: OFFER_SCHEMA } },
+    messages: [{
+      role: 'user',
+      content: `Voici une offre d'emploi${url ? ` (URL : ${url})` : ''} :\n\n${text.slice(0, 6000)}`,
+    }],
+  });
+  const block = resp.content.find((b) => b.type === 'text');
+  if (!block) return null;
+  try { return JSON.parse(block.text); } catch { return null; }
+}
+
+app.post('/api/extract-offer', async (req, res) => {
+  const aiAvailable = !!process.env.ANTHROPIC_API_KEY;
+  try {
+    const { url, text } = req.body || {};
+    if (url && !/^https?:\/\//i.test(url)) {
+      return res.json({ error: 'Lien invalide (doit commencer par http:// ou https://).', fields: {}, aiAvailable });
+    }
+    if (!url && !text) {
+      return res.json({ error: 'Fournis un lien ou le texte de l\'offre.', fields: {}, aiAvailable });
+    }
+
+    let fields = {};
+    let source = null;
+    let pageText = cleanVal(text);
+
+    if (url) {
+      const html = await fetchPage(url);
+      if (html) {
+        const ld = findJobPosting(extractJsonLd(html));
+        if (ld) { fields = mapJobPosting(ld); source = 'jsonld'; }
+        if (!fields.poste) fields.poste = cleanVal(metaContent(html, 'og:title', 'twitter:title'));
+        if (!fields.entreprise) fields.entreprise = cleanVal(metaContent(html, 'og:site_name'));
+        if (!source && (fields.poste || fields.entreprise)) source = 'meta';
+        pageText = htmlToText(html);
+      } else {
+        return res.json({
+          error: "Impossible de récupérer la page (site protégé, connexion requise ou hors ligne). Colle plutôt le texte de l'offre.",
+          fields: {}, aiAvailable,
+        });
+      }
+    }
+
+    // Repli IA si l'extraction structurée est insuffisante et qu'une clé existe.
+    const enough = fields.entreprise && fields.poste;
+    if (!enough && aiAvailable && pageText && pageText.length > 40) {
+      const ai = await extractWithAI(pageText, url);
+      if (ai) {
+        for (const k of OFFER_KEYS) {
+          if (!cleanVal(fields[k]) && cleanVal(ai[k])) fields[k] = cleanVal(ai[k]);
+        }
+        source = source || 'ai';
+        if (cleanVal(ai.entreprise) || cleanVal(ai.poste)) source = 'ai';
+      }
+    }
+
+    // Nettoyage final.
+    const out = {};
+    for (const k of OFFER_KEYS) if (cleanVal(fields[k])) out[k] = cleanVal(fields[k]);
+    if (url) out.lien_offre = url;
+
+    res.json({ source, fields: out, aiAvailable });
+  } catch (err) {
+    console.error('extract-offer:', err);
+    res.json({ error: "Erreur lors de l'extraction : " + (err.message || 'inconnue'), fields: {}, aiAvailable });
+  }
 });
 
 // --- Gestion d'erreurs multer --------------------------------------------
