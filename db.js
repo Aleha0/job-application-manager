@@ -75,5 +75,8 @@ const seedSetting = db.prepare(
 );
 // Délai (en jours) avant qu'une candidature envoyée soit signalée à relancer.
 seedSetting.run('relance_delai_jours', '7');
+// Notifications ntfy (téléphone). Sujet vide = désactivé.
+seedSetting.run('ntfy_topic', '');
+seedSetting.run('ntfy_server', 'https://ntfy.sh');
 
 module.exports = db;

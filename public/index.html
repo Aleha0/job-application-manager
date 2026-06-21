@@ -11,6 +11,15 @@
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/css/style.css" />
+  <script>
+    // Applique le thème mémorisé avant l'affichage (évite le clignotement).
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div class="app">
@@ -35,6 +44,10 @@
         </button>
       </nav>
       <div class="sidebar-footer">
+        <button class="theme-toggle" id="themeToggle" title="Changer de thème">
+          <span id="themeToggleIcon">🌙</span>
+          <span id="themeToggleLabel">Mode sombre</span>
+        </button>
         <span id="sidebarStats">—</span>
       </div>
     </aside>
@@ -145,6 +158,42 @@
               <input type="number" id="setRelanceDelai" class="input input-sm" min="1" max="365" />
               <span>jours</span>
               <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Notifications</h2></div>
+
+          <div class="form-row">
+            <label>📱 Notifications sur le téléphone (ntfy)</label>
+            <p class="muted" style="margin-bottom:10px">
+              Installe l'app <strong>ntfy</strong> (Android/iOS), abonne-toi à un sujet
+              au nom unique, puis indique-le ici. Le serveur t'enverra un récap des
+              relances. Astuce : utilise un nom long et difficile à deviner.
+            </p>
+            <div class="inline">
+              <input type="text" id="setNtfyTopic" class="input" style="max-width:340px"
+                placeholder="ex: relances-candidatures-7gK9pZ2q" />
+              <button class="btn btn-secondary" id="btnNtfyGenerate" type="button">🎲 Générer</button>
+              <button class="btn btn-secondary" id="btnNtfyTest" type="button">Tester</button>
+              <button class="btn btn-primary" data-action="save-settings">Enregistrer</button>
+            </div>
+            <p class="muted" style="margin-top:8px">
+              Sujet à ajouter dans l'app ntfy :
+              <code id="ntfyTopicHint">—</code>
+            </p>
+          </div>
+
+          <div class="form-row" style="border-top:1px solid var(--border)">
+            <label>💻 Notifications sur ce PC (navigateur)</label>
+            <p class="muted" style="margin-bottom:10px">
+              Affiche une notification système quand l'app est ouverte et que des
+              relances sont en attente.
+            </p>
+            <div class="inline">
+              <button class="btn btn-secondary" id="btnBrowserNotif" type="button">Activer les notifications navigateur</button>
+              <span id="browserNotifStatus" class="muted"></span>
             </div>
           </div>
         </div>

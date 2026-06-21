@@ -987,6 +987,17 @@ async function noteModal(id = null, candidatureId = null) {
 /* ===================================================================== */
 function renderSettings() {
   $('#setRelanceDelai').value = State.settings.relance_delai_jours || '7';
+
+  // ntfy
+  const topic = State.settings.ntfy_topic || '';
+  const topicInput = $('#setNtfyTopic');
+  if (topicInput) topicInput.value = topic;
+  const hint = $('#ntfyTopicHint');
+  if (hint) hint.textContent = topic || '—';
+
+  // Statut des notifications navigateur
+  updateBrowserNotifStatus();
+
   const badge = $('#aiStatusBadge');
   if (badge) {
     if (State.aiAvailable) {
@@ -1003,14 +1014,135 @@ function renderSettings() {
 
 async function saveSettings() {
   const delai = $('#setRelanceDelai').value;
+  const ntfyTopic = ($('#setNtfyTopic')?.value || '').trim();
   try {
-    await api('/api/settings', { method: 'PUT', body: { relance_delai_jours: delai } });
+    await api('/api/settings', {
+      method: 'PUT',
+      body: { relance_delai_jours: delai, ntfy_topic: ntfyTopic },
+    });
     State.settings.relance_delai_jours = delai;
+    State.settings.ntfy_topic = ntfyTopic;
+    const hint = $('#ntfyTopicHint');
+    if (hint) hint.textContent = ntfyTopic || '—';
     toast('Paramètres enregistrés');
     await afterChange();
   } catch (err) {
     toast(err.message, 'err');
   }
+}
+
+/* ===================================================================== */
+/*  Thème (clair / sombre)                                              */
+/* ===================================================================== */
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  const icon = $('#themeToggleIcon');
+  const label = $('#themeToggleLabel');
+  if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+  if (label) label.textContent = theme === 'dark' ? 'Mode clair' : 'Mode sombre';
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  try { localStorage.setItem('theme', next); } catch {}
+  applyTheme(next);
+}
+
+/* ===================================================================== */
+/*  Notifications (navigateur + ntfy)                                   */
+/* ===================================================================== */
+function updateBrowserNotifStatus() {
+  const el = $('#browserNotifStatus');
+  const btn = $('#btnBrowserNotif');
+  if (!el) return;
+  if (!('Notification' in window)) {
+    el.textContent = 'Non supporté par ce navigateur.';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    el.textContent = '✅ Activées';
+    if (btn) btn.textContent = 'Notifications activées';
+  } else if (Notification.permission === 'denied') {
+    el.textContent = '⛔ Bloquées (à réautoriser dans le navigateur).';
+  } else {
+    el.textContent = '';
+  }
+}
+
+async function enableBrowserNotif() {
+  if (!('Notification' in window)) return;
+  try {
+    const perm = await Notification.requestPermission();
+    updateBrowserNotifStatus();
+    if (perm === 'granted') {
+      new Notification('Notifications activées 🎉', {
+        body: 'Tu seras prévenu·e des candidatures à relancer.',
+      });
+      maybeNotifyBrowserReminders();
+    }
+  } catch {}
+}
+
+// Affiche une notif navigateur si des relances sont en attente (1×/jour max).
+async function maybeNotifyBrowserReminders() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const today = todayLocalISO();
+    if (localStorage.getItem('browserNotifLast') === today) return;
+    const data = await api('/api/reminders');
+    const n = (data.reminders || []).length;
+    if (n > 0) {
+      new Notification(`${n} candidature${n > 1 ? 's' : ''} à relancer`, {
+        body: data.reminders.slice(0, 4).map((c) => `• ${c.entreprise} — ${c.poste}`).join('\n'),
+      });
+      localStorage.setItem('browserNotifLast', today);
+    }
+  } catch {}
+}
+
+function randomTopic() {
+  const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  const arr = new Uint8Array(10);
+  (window.crypto || {}).getRandomValues?.(arr);
+  for (let i = 0; i < 10; i++) s += chars[(arr[i] || Math.floor(Math.random() * 256)) % chars.length];
+  return 'relances-' + s;
+}
+
+async function testNtfy() {
+  const topic = ($('#setNtfyTopic')?.value || '').trim();
+  if (!topic) { toast("Indique d'abord un sujet ntfy", 'err'); return; }
+  // S'assure que le sujet est enregistré avant le test.
+  if (topic !== (State.settings.ntfy_topic || '')) await saveSettings();
+  const btn = $('#btnNtfyTest');
+  const old = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+  try {
+    const res = await api('/api/notify-test', { method: 'POST' });
+    if (res.ok) toast('Notification de test envoyée ! Vérifie ton téléphone.');
+    else toast(res.error || "Échec de l'envoi", 'err');
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old; }
+  }
+}
+
+// Branche les contrôles statiques (présents dès le chargement).
+function setupStaticControls() {
+  $('#themeToggle')?.addEventListener('click', toggleTheme);
+  $('#btnBrowserNotif')?.addEventListener('click', enableBrowserNotif);
+  $('#btnNtfyTest')?.addEventListener('click', testNtfy);
+  $('#btnNtfyGenerate')?.addEventListener('click', () => {
+    const input = $('#setNtfyTopic');
+    if (input) input.value = randomTopic();
+  });
 }
 
 /* ===================================================================== */
@@ -1150,10 +1282,19 @@ document.addEventListener('input', (e) => {
 /*  Démarrage                                                            */
 /* ===================================================================== */
 (async function init() {
+  // Thème (le script du <head> a déjà appliqué la classe ; on synchronise le bouton).
+  let savedTheme = 'light';
+  try { savedTheme = localStorage.getItem('theme') || 'light'; } catch {}
+  applyTheme(savedTheme);
+  setupStaticControls();
+
   try {
     await loadAll();
     await renderFlash();
     switchView('dashboard');
+    // Notifications : récap navigateur (si autorisé) + déclenche le check ntfy serveur.
+    maybeNotifyBrowserReminders();
+    api('/api/notify-check', { method: 'POST' }).catch(() => {});
   } catch (err) {
     document.body.innerHTML = `<div style="padding:40px;font-family:sans-serif">
       <h1>Erreur de chargement</h1><p>${esc(err.message)}</p>

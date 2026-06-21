@@ -20,6 +20,9 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Tableau de bord** avec statistiques.
 - **Remplissage auto depuis l'offre** : colle le lien d'une offre et l'app
   pré-remplit les champs (entreprise, poste, lieu, salaire, contrat…).
+- **Mode sombre** 🌙 : thème clair/sombre, mémorisé entre les sessions.
+- **Notifications de relance** : sur ton téléphone (via ntfy) et/ou sur ton PC
+  (notifications du navigateur).
 
 ## ✨ Remplissage automatique depuis une offre d'emploi
 
@@ -70,6 +73,31 @@ npm start
 Puis ouvre ton navigateur sur **http://localhost:3000**
 
 > Astuce : `npm run dev` relance automatiquement le serveur à chaque modification du code.
+
+## 🔔 Notifications de relance
+
+### Sur ton téléphone (via ntfy — gratuit)
+
+1. Installe l'app **ntfy** ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) /
+   [F-Droid](https://f-droid.org/packages/io.heckel.ntfy/) / iOS App Store).
+2. Dans l'app, abonne-toi à un **sujet** au nom unique et difficile à deviner
+   (ex : `relances-candidatures-7gK9pZ2q`).
+3. Dans l'app web → **Paramètres → Notifications**, saisis le même sujet
+   (le bouton **🎲 Générer** en propose un), clique **Tester**, puis **Enregistrer**.
+
+Le serveur envoie un récap des relances une fois par jour (au plus) quand l'app
+tourne. Les messages sont neutres (« 3 candidatures à relancer ») — aucune donnée
+sensible ne transite.
+
+> 🔒 Sur le service public `ntfy.sh`, le nom du sujet fait office de mot de passe :
+> choisis-le long et aléatoire. Pour un usage 100 % privé, tu peux héberger ton
+> propre serveur ntfy et renseigner son adresse dans le réglage `ntfy_server`.
+
+### Sur ton PC (navigateur)
+
+Dans **Paramètres → Notifications**, clique sur **Activer les notifications
+navigateur**. Tu recevras une notification système (quand l'app est ouverte) s'il
+y a des relances en attente.
 
 ## 💾 Où sont mes données ?
 

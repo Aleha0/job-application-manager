@@ -795,6 +795,95 @@ app.post('/api/extract-offer', async (req, res) => {
   }
 });
 
+// =========================================================================
+//  API : NOTIFICATIONS (ntfy)
+// =========================================================================
+
+// Envoie une notification via ntfy. Renvoie true si OK.
+async function sendNtfy(title, message, { priority, tags } = {}) {
+  const topic = (getSetting('ntfy_topic', '') || '').trim();
+  if (!topic) return false;
+  const server = (getSetting('ntfy_server', 'https://ntfy.sh') || 'https://ntfy.sh').replace(/\/+$/, '');
+  const headers = { 'Content-Type': 'text/plain; charset=utf-8' };
+  if (title) headers['Title'] = encodeURIComponent(title).replace(/%20/g, ' ');
+  if (priority) headers['Priority'] = String(priority);
+  if (tags) headers['Tags'] = tags;
+  const controller = new AbortController();
+  const to = setTimeout(() => controller.abort(), 10000);
+  try {
+    const r = await fetch(`${server}/${encodeURIComponent(topic)}`, {
+      method: 'POST',
+      headers,
+      body: message,
+      signal: controller.signal,
+    });
+    return r.ok;
+  } catch (err) {
+    console.error('ntfy:', err.message);
+    return false;
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+// Vérifie les relances et envoie une notification ntfy (au plus une par jour).
+async function checkAndNotify(force = false) {
+  const topic = (getSetting('ntfy_topic', '') || '').trim();
+  if (!topic) return;
+  const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+  const rows = db.prepare('SELECT * FROM candidatures').all();
+  const reminders = rows
+    .map((c) => ({ ...c, relance: computeRelance(c, delai) }))
+    .filter((c) => c.relance.aRelancer);
+  if (!reminders.length) return;
+
+  const today = todayISO();
+  if (!force && getSetting('ntfy_last_sent', '') === today) return;
+
+  const n = reminders.length;
+  const liste = reminders
+    .slice(0, 5)
+    .map((c) => `• ${c.entreprise} — ${c.poste}`)
+    .join('\n');
+  const extra = n > 5 ? `\n…et ${n - 5} autre(s)` : '';
+  const ok = await sendNtfy(
+    `${n} candidature${n > 1 ? 's' : ''} à relancer`,
+    `${liste}${extra}`,
+    { priority: 'default', tags: 'bell' }
+  );
+  if (ok) {
+    db.prepare(
+      'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    ).run('ntfy_last_sent', today);
+  }
+}
+
+// Endpoint de test : envoie une notification immédiate.
+app.post(
+  '/api/notify-test',
+  asyncRoute(async (req, res) => {
+    const topic = (getSetting('ntfy_topic', '') || '').trim();
+    if (!topic) {
+      return res.json({ ok: false, error: "Aucun sujet ntfy configuré. Enregistre un sujet d'abord." });
+    }
+    const ok = await sendNtfy(
+      'Test — Gestion des candidatures',
+      'Si tu lis ceci sur ton téléphone, les notifications fonctionnent ! 🎉',
+      { priority: 'default', tags: 'tada' }
+    );
+    res.json(ok ? { ok: true } : { ok: false, error: "Échec de l'envoi (vérifie le sujet et ta connexion)." });
+  })
+);
+
+// Déclenche manuellement la vérification des relances (utilisé au chargement).
+app.post(
+  '/api/notify-check',
+  asyncRoute(async (req, res) => {
+    await checkAndNotify(false);
+    res.json({ ok: true });
+  })
+);
+
 // --- Gestion d'erreurs multer --------------------------------------------
 
 app.use((err, req, res, next) => {
@@ -810,4 +899,9 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`\n  ✅ Gestion des candidatures lancée !`);
   console.log(`  👉 Ouvre ton navigateur : http://localhost:${PORT}\n`);
+
+  // Vérifie les relances au démarrage (après un court délai), puis toutes les 6 h.
+  // La notification ntfy n'est envoyée qu'une fois par jour maximum.
+  setTimeout(() => { checkAndNotify(false).catch(() => {}); }, 4000);
+  setInterval(() => { checkAndNotify(false).catch(() => {}); }, 6 * 60 * 60 * 1000);
 });
