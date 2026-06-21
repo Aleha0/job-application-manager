@@ -1736,6 +1736,18 @@ function renderSettings() {
   // Gestion des plateformes de candidature
   renderPlatManager();
 
+  // À propos : version + compteurs
+  api('/api/about').then((a) => {
+    const v = $('#aboutVersion');
+    if (v) v.textContent = 'v' + (a.version || '?');
+    const c = $('#aboutCounts');
+    if (c && a.counts) {
+      c.textContent =
+        `${a.counts.candidatures} candidature(s) · ${a.counts.documents} document(s) · ` +
+        `${a.counts.cvtheques} CVthèque(s) · ${a.counts.notes} note(s)`;
+    }
+  }).catch(() => {});
+
   const badge = $('#aiStatusBadge');
   if (badge) {
     if (State.aiAvailable) {

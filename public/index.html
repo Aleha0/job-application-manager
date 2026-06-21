@@ -328,12 +328,40 @@ npm start</code></pre>
         <div class="settings-list">
           <div class="settings-row stack">
             <div class="settings-row-info">
-              <div class="settings-row-label">À propos</div>
+              <div class="settings-row-label">Gestion des candidatures <span class="tag" id="aboutVersion">—</span></div>
               <div class="settings-row-desc">
-                Application 100 % locale. Tes données sont stockées sur ton ordinateur
-                (base <code>data/gestion.db</code> et fichiers dans <code>uploads/</code>).
-                Seule la fonction « Remplir depuis l'offre » contacte Internet
-                (la page de l'offre, et l'API Claude si tu l'actives).
+                Application 100 % locale. Tes données restent sur ton ordinateur ;
+                seule la fonction « Remplir depuis l'offre » contacte Internet.
+                <br /><a href="https://github.com/Aleha0/gestion-candidatures" target="_blank" rel="noopener">Dépôt GitHub ↗</a>
+              </div>
+            </div>
+          </div>
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">📊 Tes données</div>
+              <div class="settings-row-desc" id="aboutCounts">…</div>
+            </div>
+          </div>
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">💾 Sauvegarde</div>
+              <div class="settings-row-desc">
+                Télécharge une sauvegarde complète (un fichier <strong>.zip</strong> contenant
+                ta base de données et tous tes fichiers importés). Conserve-la en lieu sûr
+                (clé USB, cloud…). Pour restaurer : décompresse le zip et remets les dossiers
+                <code>data/</code> et <code>uploads/</code> dans l'application.
+              </div>
+            </div>
+            <div class="settings-row-control">
+              <a class="btn btn-primary" href="/api/backup">💾 Télécharger une sauvegarde (.zip)</a>
+            </div>
+          </div>
+          <div class="settings-row stack">
+            <div class="settings-row-info">
+              <div class="settings-row-label">⌨️ Raccourcis clavier</div>
+              <div class="settings-row-desc kbd-list">
+                <div><kbd>Ctrl</kbd> + <kbd>K</kbd> &nbsp;—&nbsp; recherche globale</div>
+                <div><kbd>Échap</kbd> &nbsp;—&nbsp; fermer une fenêtre</div>
               </div>
             </div>
           </div>

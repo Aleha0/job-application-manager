@@ -5,7 +5,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
+const archiver = require('archiver');
 const db = require('./db');
+const pkg = require('./package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +20,11 @@ const UPLOAD_DIR = process.env.GC_UPLOAD_DIR
   ? path.resolve(process.env.GC_UPLOAD_DIR)
   : path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Dossier de la base (même logique que db.js) — pour la sauvegarde.
+const DATA_DIR = process.env.GC_DATA_DIR
+  ? path.resolve(process.env.GC_DATA_DIR)
+  : path.join(__dirname, 'data');
 
 // --- Constantes -----------------------------------------------------------
 
@@ -900,6 +907,97 @@ app.put(
 // Métadonnées (statuts disponibles) pour le frontend.
 app.get('/api/meta', (req, res) => {
   res.json({ statuts: STATUTS, aiAvailable: !!process.env.ANTHROPIC_API_KEY });
+});
+
+// Infos « À propos » : version + compteurs de données.
+app.get(
+  '/api/about',
+  asyncRoute((req, res) => {
+    const count = (t) => db.prepare(`SELECT COUNT(*) n FROM ${t}`).get().n;
+    res.json({
+      version: pkg.version,
+      counts: {
+        candidatures: count('candidatures'),
+        documents: count('documents'),
+        notes: count('notes'),
+        cvtheques: count('cvtheques'),
+      },
+    });
+  })
+);
+
+// Échappe une cellule CSV (séparateur ;).
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Construit le CSV des candidatures (en-têtes FR, séparateur ;).
+function buildCandidaturesCsv(rows) {
+  const headers = [
+    'Entreprise', 'Poste', 'Lieu', 'Statut', 'Type de contrat', 'Plateforme',
+    'Salaire', 'Date de candidature', 'Date de relance', 'Date de réponse',
+    'Recruteur', 'Email recruteur', "Lien de l'offre", 'Étiquettes',
+  ];
+  const lines = [headers.join(';')];
+  for (const c of rows) {
+    lines.push([
+      c.entreprise, c.poste, c.lieu, c.statut, c.type_contrat, c.plateforme,
+      c.salaire, c.date_candidature, c.date_relance, c.date_reponse,
+      c.recruteur_nom, c.recruteur_email, c.lien_offre, parseTags(c.tags).join(', '),
+    ].map(csvCell).join(';'));
+  }
+  return lines.join('\r\n');
+}
+
+// Sauvegarde complète : zip de la base (data/) + des fichiers (uploads/)
+// + un export interopérable (JSON complet et CSV des candidatures).
+app.get('/api/backup', (req, res) => {
+  // Consolide le WAL dans le fichier .db pour une sauvegarde cohérente.
+  try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { console.error('checkpoint:', e.message); }
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="sauvegarde-candidatures-${todayISO()}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    console.error('backup:', err);
+    if (!res.headersSent) res.status(500);
+    try { res.end(); } catch {}
+  });
+  archive.pipe(res);
+
+  // Dossiers bruts (restauration dans l'app).
+  if (fs.existsSync(DATA_DIR)) archive.directory(DATA_DIR, 'data');
+  if (fs.existsSync(UPLOAD_DIR)) archive.directory(UPLOAD_DIR, 'uploads');
+
+  // Export réutilisable par d'autres applications.
+  try {
+    const candidatures = db
+      .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
+      .all();
+    const settings = {};
+    for (const r of db.prepare('SELECT key, value FROM settings').all()) settings[r.key] = r.value;
+    const full = {
+      app: 'gestion-candidatures',
+      version: pkg.version,
+      exported_at: new Date().toISOString(),
+      candidatures: candidatures.map((c) => ({ ...c, tags: parseTags(c.tags) })),
+      documents: db.prepare('SELECT * FROM documents').all(),
+      notes: db.prepare('SELECT * FROM notes').all(),
+      folders: db.prepare('SELECT * FROM folders').all(),
+      cvtheques: db.prepare('SELECT * FROM cvtheques').all(),
+      cvtheque_cvs: db.prepare('SELECT * FROM cvtheque_cvs').all(),
+      settings,
+    };
+    archive.append(JSON.stringify(full, null, 2), { name: 'export/donnees.json' });
+    // BOM UTF-8 pour qu'Excel affiche bien les accents.
+    archive.append('﻿' + buildCandidaturesCsv(candidatures), { name: 'export/candidatures.csv' });
+  } catch (e) {
+    console.error('backup export:', e.message);
+  }
+
+  archive.finalize();
 });
 
 // =========================================================================
