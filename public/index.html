@@ -150,11 +150,39 @@
         </div>
 
         <div class="card">
+          <div class="card-head">
+            <h2>Remplissage auto depuis l'offre</h2>
+            <span id="aiStatusBadge" class="tag">—</span>
+          </div>
+          <div class="form-row">
+            <p class="muted" style="margin-bottom:10px">
+              Dans une candidature, colle le lien d'une offre puis clique sur
+              <strong>« ✨ Remplir »</strong> : l'app lit les données structurées de la
+              page (gratuit). Pour les sites qui n'en fournissent pas, tu peux activer
+              l'extraction par <strong>IA (Claude)</strong> en définissant une clé API.
+            </p>
+            <p class="muted">
+              Pour activer l'IA : crée une clé sur
+              <code>console.anthropic.com</code>, puis lance l'app avec la variable
+              d'environnement <code>ANTHROPIC_API_KEY</code> :
+            </p>
+            <pre style="background:var(--surface-2);padding:12px;border-radius:8px;overflow:auto;font-size:0.82rem;margin-top:8px"><code># PowerShell (Windows)
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+npm start</code></pre>
+            <p class="muted" style="margin-top:8px">
+              Le « coller le texte de l'offre » fonctionne aussi <strong>sans clé</strong>
+              dès que l'IA est activée, et reste le meilleur recours pour LinkedIn/Indeed.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-head"><h2>À propos</h2></div>
           <p class="muted">
             Application 100% locale. Tes données sont stockées sur ton ordinateur
             (base <code>data/gestion.db</code> et fichiers dans <code>uploads/</code>).
-            Aucune donnée n'est envoyée sur Internet.
+            Seule la fonction « Remplir depuis l'offre » contacte Internet
+            (la page de l'offre, et l'API Claude si tu l'actives).
           </p>
         </div>
       </section>

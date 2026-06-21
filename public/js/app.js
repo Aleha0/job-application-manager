@@ -30,6 +30,7 @@ const State = {
   settings: {},
   currentFolder: 'all',     // 'all' | 'none' | folderId
   filterStatut: '',         // '' = tous, sinon un statut
+  aiAvailable: false,       // IA d'extraction activée (clé API présente)
   view: 'dashboard',
 };
 
@@ -167,6 +168,7 @@ async function loadAll() {
     api('/api/settings'),
   ]);
   State.statuts = meta.statuts;
+  State.aiAvailable = !!meta.aiAvailable;
   State.candidatures = candidatures;
   State.folders = folders;
   State.settings = settings;
@@ -452,7 +454,19 @@ function candidatureModal(c = null) {
           </div>
           <div class="field full">
             <label>Lien vers l'offre</label>
-            <input class="input" type="url" name="lien_offre" value="${esc(c.lien_offre)}" placeholder="https://..." />
+            <div class="inline" style="gap:8px; flex-wrap:nowrap">
+              <input class="input" type="url" name="lien_offre" id="lienOffreInput" value="${esc(c.lien_offre)}" placeholder="https://..." style="flex:1" />
+              <button type="button" class="btn btn-secondary" id="btnFillFromUrl" title="Remplir les champs depuis l'offre">✨ Remplir</button>
+            </div>
+            <span class="hint">Colle le lien puis clique sur « Remplir », ou
+              <a href="#" id="lnkPasteText">colle le texte de l'offre</a>.</span>
+            <div id="pasteTextBlock" class="hidden" style="margin-top:10px">
+              <textarea class="input" id="offerTextArea" rows="6"
+                placeholder="Colle ici le texte complet de l'offre d'emploi..."></textarea>
+              <div class="inline" style="margin-top:8px">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnFillFromText">Extraire depuis le texte</button>
+              </div>
+            </div>
           </div>
         </div>
       </form>
@@ -486,6 +500,80 @@ function candidatureModal(c = null) {
       toast(err.message, 'err');
     }
   });
+
+  // Remplissage automatique depuis l'offre.
+  $('#btnFillFromUrl')?.addEventListener('click', (e) => {
+    fillFromOffer({ url: ($('#lienOffreInput')?.value || '').trim() }, e.currentTarget);
+  });
+  $('#lnkPasteText')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    $('#pasteTextBlock')?.classList.toggle('hidden');
+    $('#offerTextArea')?.focus();
+  });
+  $('#btnFillFromText')?.addEventListener('click', (e) => {
+    fillFromOffer({ text: ($('#offerTextArea')?.value || '').trim() }, e.currentTarget);
+  });
+}
+
+/* --- Remplissage automatique depuis une offre d'emploi ------------- */
+async function fillFromOffer(payload, btn) {
+  if (payload.url && !/^https?:\/\//i.test(payload.url)) {
+    toast('Entre un lien valide (https://...)', 'err');
+    return;
+  }
+  if (!payload.url && !payload.text) {
+    toast("Colle un lien ou le texte de l'offre", 'err');
+    return;
+  }
+  const oldLabel = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyse…'; }
+  try {
+    const res = await api('/api/extract-offer', { method: 'POST', body: payload });
+    if (res.error) toast(res.error, 'err');
+    const filled = applyOfferFields(res.fields || {});
+    if (filled.length) {
+      toast(`Champs remplis : ${filled.join(', ')}${res.source === 'ai' ? ' (via IA)' : ''}`);
+      $('#pasteTextBlock')?.classList.add('hidden');
+    } else if (!res.error) {
+      toast(
+        res.aiAvailable
+          ? "Aucune info exploitable trouvée. Essaie de coller le texte de l'offre."
+          : "Rien trouvé automatiquement. Colle le texte de l'offre, ou active l'IA (voir Paramètres).",
+        'err'
+      );
+    }
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldLabel; }
+  }
+}
+
+// Remplit les champs vides du formulaire avec les valeurs extraites.
+function applyOfferFields(f) {
+  const form = $('#candidatureForm');
+  if (!form) return [];
+  const labels = {
+    entreprise: 'Entreprise', poste: 'Poste', lieu: 'Lieu', salaire: 'Salaire',
+    type_contrat: 'Contrat', recruteur_nom: 'Recruteur', recruteur_email: 'Email',
+    lien_offre: 'Lien',
+  };
+  const filled = [];
+  for (const [k, label] of Object.entries(labels)) {
+    const val = (f[k] || '').trim();
+    if (!val) continue;
+    const el = form.elements[k];
+    if (!el) continue;
+    if (el.value && el.value.trim()) continue; // ne pas écraser une saisie existante
+    if (el.tagName === 'SELECT') {
+      const opt = [...el.options].find((o) => o.value.toLowerCase() === val.toLowerCase());
+      if (opt) { el.value = opt.value; filled.push(label); }
+    } else {
+      el.value = val;
+      filled.push(label);
+    }
+  }
+  return filled;
 }
 
 /* --- Éléments liés (docs + notes) dans la modale candidature -------- */
@@ -899,6 +987,18 @@ async function noteModal(id = null, candidatureId = null) {
 /* ===================================================================== */
 function renderSettings() {
   $('#setRelanceDelai').value = State.settings.relance_delai_jours || '7';
+  const badge = $('#aiStatusBadge');
+  if (badge) {
+    if (State.aiAvailable) {
+      badge.textContent = '✅ IA activée';
+      badge.style.background = 'var(--green-soft)';
+      badge.style.color = 'var(--green)';
+    } else {
+      badge.textContent = '○ IA désactivée';
+      badge.style.background = 'var(--surface-2)';
+      badge.style.color = 'var(--muted)';
+    }
+  }
 }
 
 async function saveSettings() {
