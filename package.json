@@ -1,7 +1,7 @@
 {
-  "name": "gestion-candidatures",
+  "name": "job-application-manager",
   "version": "1.0.0",
-  "description": "Application locale pour gérer ses candidatures, CV, lettres de motivation et le suivi des relances.",
+  "description": "A 100% local web app to manage your job applications, CVs, cover letters and follow-ups.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -9,10 +9,10 @@
     "dev": "node --watch server.js"
   },
   "keywords": [
-    "candidatures",
-    "emploi",
+    "job-search",
+    "job-application",
     "cv",
-    "suivi"
+    "tracking"
   ],
   "author": "Aleha0",
   "license": "MIT",

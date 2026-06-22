@@ -157,7 +157,7 @@ are ignored by Git (`.gitignore`), so your data always stays private.
 ## 📁 Project structure
 
 ```
-gestion-candidatures/
+job-application-manager/
 ├── server.js          # Express server + REST API
 ├── db.js              # SQLite connection + schema
 ├── package.json
