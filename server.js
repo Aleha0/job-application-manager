@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const dns = require('dns').promises;
 const express = require('express');
 const multer = require('multer');
 const archiver = require('archiver');
@@ -46,7 +47,23 @@ const STATUTS_RELANCABLES = ['Envoyée', 'Relancée', 'En réserve'];
 
 // --- Middlewares ----------------------------------------------------------
 
-app.use(express.json());
+// En-têtes de sécurité (anti-sniff, anti-clickjacking, CSP adaptée à l'app).
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src 'self' https://fonts.gstatic.com; " +
+      "img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'"
+  );
+  next();
+});
+
+app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Upload (multer) ------------------------------------------------------
@@ -55,7 +72,9 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const unique = crypto.randomBytes(8).toString('hex');
-    const ext = path.extname(file.originalname);
+    // Extension assainie (caractères sûrs uniquement, longueur bornée).
+    let ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '');
+    if (ext.length > 10) ext = '';
     cb(null, `${Date.now()}-${unique}${ext}`);
   },
 });
@@ -699,7 +718,13 @@ app.put(
   })
 );
 
-// Visualiser le fichier dans le navigateur (inline).
+// Types autorisés à s'afficher « inline » dans le navigateur (les autres sont
+// téléchargés). Empêche un fichier HTML/SVG uploadé d'exécuter du script.
+const INLINE_MIME_OK = new Set([
+  'application/pdf', 'text/plain',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+]);
+
 app.get(
   '/api/documents/:id/view',
   asyncRoute((req, res) => {
@@ -707,10 +732,15 @@ app.get(
     if (!doc) return res.status(404).json({ error: 'Document introuvable.' });
     const p = path.join(UPLOAD_DIR, doc.stored_name);
     if (!fs.existsSync(p)) return res.status(404).json({ error: 'Fichier manquant.' });
-    if (doc.mime) res.type(doc.mime);
+
+    const safeInline = doc.mime && INLINE_MIME_OK.has(doc.mime);
+    // Bac à sable + pas de sniff : le contenu ne peut pas exécuter de script.
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; sandbox");
+    if (safeInline) res.type(doc.mime);
+    else res.type('application/octet-stream');
     res.setHeader(
       'Content-Disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(doc.original_name)}`
+      `${safeInline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(doc.original_name)}`
     );
     fs.createReadStream(p).pipe(res);
   })
@@ -962,6 +992,12 @@ app.get(
   })
 );
 
+// Clés de réglages modifiables par le client (liste blanche).
+const ALLOWED_SETTINGS = new Set([
+  'relance_delai_jours', 'ntfy_topic', 'ntfy_server', 'tags', 'plateformes',
+  'domaines', 'cvtheque_maj_delai_mois', 'objectif_hebdo',
+]);
+
 app.put(
   '/api/settings',
   asyncRoute((req, res) => {
@@ -969,7 +1005,9 @@ app.put(
     const stmt = db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
     );
-    for (const [k, v] of Object.entries(b)) stmt.run(k, String(v));
+    for (const [k, v] of Object.entries(b)) {
+      if (ALLOWED_SETTINGS.has(k)) stmt.run(k, String(v));
+    }
     res.json({ ok: true });
   })
 );
@@ -1362,7 +1400,39 @@ function mapJobPosting(j) {
   };
 }
 
+// Détecte une IP privée / loopback / link-local (anti-SSRF).
+function isPrivateIP(ip) {
+  const v = (ip || '').toLowerCase();
+  if (v.includes(':')) {
+    // IPv6
+    return v === '::1' || v.startsWith('fe80') || v.startsWith('fc') ||
+      v.startsWith('fd') || v.startsWith('::ffff:127.') || v === '::';
+  }
+  const p = v.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n))) return true; // suspect -> bloque
+  const [a, b] = p;
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+// Vérifie qu'une URL est sûre à récupérer (http/https + IP publique).
+async function urlIsSafeToFetch(u) {
+  let url;
+  try { url = new URL(u); } catch { return false; }
+  if (!/^https?:$/.test(url.protocol)) return false;
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (host.toLowerCase() === 'localhost') return false;
+  try {
+    const addrs = await dns.lookup(host, { all: true });
+    if (!addrs.length) return false;
+    return addrs.every((a) => !isPrivateIP(a.address));
+  } catch {
+    return false;
+  }
+}
+
 async function fetchPage(url) {
+  if (!(await urlIsSafeToFetch(url))) return null;
   try {
     const controller = new AbortController();
     const to = setTimeout(() => controller.abort(), 12000);
@@ -1584,7 +1654,10 @@ app.use((err, req, res, next) => {
 
 // --- Démarrage ------------------------------------------------------------
 
-app.listen(PORT, () => {
+// Par défaut, n'écoute que sur localhost (pas d'exposition réseau).
+// Surchargeable via GC_HOST (ex: 0.0.0.0) si tu veux y accéder depuis le réseau.
+const HOST = process.env.GC_HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
   console.log(`\n  ✅ Gestion des candidatures lancée !`);
   console.log(`  👉 Ouvre ton navigateur : http://localhost:${PORT}\n`);
 

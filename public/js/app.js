@@ -296,6 +296,8 @@ function escClose(e) { if (e.key === 'Escape') closeModal(); }
 window.closeModal = closeModal;
 
 // Modale de confirmation stylée. Renvoie une Promise<boolean>.
+// NB: `message` est inséré en HTML brut — les appelants DOIVENT échapper
+// toute donnée dynamique avec esc() (ex: esc(nom)).
 function confirmDialog(opts = {}) {
   const {
     title = 'Confirmer la suppression',
