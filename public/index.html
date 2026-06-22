@@ -109,9 +109,11 @@
             <h1>Candidatures</h1>
             <p class="muted">Suivi détaillé de toutes tes candidatures</p>
           </div>
-          <button class="btn btn-primary" data-action="new-candidature">
-            + Nouvelle candidature
-          </button>
+          <div class="header-actions">
+            <a class="btn btn-secondary" href="/api/export/excel" title="Exporter en Excel">⬇ Excel</a>
+            <a class="btn btn-secondary" href="/api/export/pdf" title="Exporter en PDF">⬇ PDF</a>
+            <button class="btn btn-primary" data-action="new-candidature">+ Nouvelle candidature</button>
+          </div>
         </header>
 
         <div class="filter-bar">

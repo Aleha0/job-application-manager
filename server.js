@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const archiver = require('archiver');
+const ExcelJS = require('exceljs');
+const PDFDocument = require('pdfkit');
 const db = require('./db');
 const pkg = require('./package.json');
 
@@ -1066,6 +1068,182 @@ app.get('/api/backup', (req, res) => {
   }
 
   archive.finalize();
+});
+
+// --- Export Excel / PDF des candidatures ---------------------------------
+
+// Colonnes communes aux exports.
+const EXPORT_COLS = [
+  { header: 'Entreprise', key: 'entreprise', width: 22 },
+  { header: 'Poste', key: 'poste', width: 24 },
+  { header: 'Lieu', key: 'lieu', width: 16 },
+  { header: 'Statut', key: 'statut', width: 14 },
+  { header: 'Type de contrat', key: 'type_contrat', width: 14 },
+  { header: 'Plateforme', key: 'plateforme', width: 16 },
+  { header: 'Domaine', key: 'domaine', width: 18 },
+  { header: 'Salaire', key: 'salaire', width: 12 },
+  { header: 'Date candidature', key: 'date_candidature', width: 16 },
+  { header: 'Date relance', key: 'date_relance', width: 14 },
+  { header: 'Date réponse', key: 'date_reponse', width: 14 },
+  { header: 'Recruteur', key: 'recruteur_nom', width: 18 },
+  { header: 'Email recruteur', key: 'recruteur_email', width: 22 },
+  { header: "Lien de l'offre", key: 'lien_offre', width: 30 },
+  { header: 'Étiquettes', key: 'tags', width: 22 },
+];
+
+function candidaturesForExport() {
+  return db
+    .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
+    .all()
+    .map((c) => ({ ...c, tags: parseTags(c.tags).join(', ') }));
+}
+
+app.get('/api/export/excel', async (req, res) => {
+  try {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Candidatures');
+    ws.columns = EXPORT_COLS.map((c) => ({ header: c.header, key: c.key, width: c.width }));
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF0FE' } };
+    ws.autoFilter = { from: 'A1', to: { row: 1, column: EXPORT_COLS.length } };
+    ws.views = [{ state: 'frozen', ySplit: 1 }];
+    for (const c of candidaturesForExport()) ws.addRow(c);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="candidatures-${todayISO()}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('export excel:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur export Excel.' });
+  }
+});
+
+app.get('/api/export/pdf', (req, res) => {
+  try {
+    const rows = candidaturesForExport();
+    // Colonnes clés (largeurs de base, mises à l'échelle pour remplir la page).
+    const cols = [
+      { label: 'Entreprise', key: 'entreprise', w: 130 },
+      { label: 'Poste', key: 'poste', w: 165 },
+      { label: 'Statut', key: 'statut', w: 80 },
+      { label: 'Plateforme', key: 'plateforme', w: 95 },
+      { label: 'Domaine', key: 'domaine', w: 105 },
+      { label: 'Lieu', key: 'lieu', w: 90 },
+      { label: 'Candidature', key: 'date_candidature', w: 80 },
+    ];
+    const FS = 9;
+    const PADX = 6;
+    const PADY = 5;
+    const MINH = 14;
+
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36, bufferPages: true });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="candidatures-${todayISO()}.pdf"`);
+    doc.pipe(res);
+
+    const left = doc.page.margins.left;
+    const top = doc.page.margins.top;
+    const bottom = doc.page.height - doc.page.margins.bottom;
+
+    // Met les colonnes à l'échelle pour occuper toute la largeur utile.
+    const usable = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const baseSum = cols.reduce((s, c) => s + c.w, 0);
+    const k = usable / baseSum;
+    for (const c of cols) c.w = c.w * k;
+    const tableW = usable;
+
+    // Récapitulatif par statut (statuts non vides, dans l'ordre).
+    const counts = {};
+    for (const r of rows) counts[r.statut] = (counts[r.statut] || 0) + 1;
+    const summary = STATUTS.filter((s) => counts[s]).map((s) => `${s} : ${counts[s]}`).join('     ·     ');
+
+    // Date + heure de l'export (ex : 22/06/2026 à 14:30).
+    const now = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const exportLe = `${p2(now.getDate())}/${p2(now.getMonth() + 1)}/${now.getFullYear()} à ${p2(now.getHours())}:${p2(now.getMinutes())}`;
+
+    const drawTitle = () => {
+      doc.font('Helvetica-Bold').fontSize(16).fillColor('#1c2333').text('Mes candidatures', left, top);
+      doc.font('Helvetica').fontSize(9).fillColor('#8b92a6').text(`Export du ${exportLe}`);
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#4f46e5').text(`Total : ${rows.length} candidature(s)`);
+      if (summary) {
+        doc.moveDown(0.25);
+        doc.font('Helvetica').fontSize(9).fillColor('#5a6275').text(summary, { width: tableW });
+      }
+      doc.moveDown(0.7);
+    };
+
+    const drawHeader = () => {
+      const y = doc.y;
+      const h = MINH + 6;
+      doc.rect(left, y, tableW, h).fill('#4f46e5');
+      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(FS);
+      let x = left;
+      for (const c of cols) {
+        doc.text(c.label, x + PADX, y + 5, { width: c.w - PADX * 2, lineBreak: false, ellipsis: true });
+        x += c.w;
+      }
+      doc.font('Helvetica').fillColor('#1c2333');
+      doc.y = y + h;
+    };
+
+    drawTitle();
+    drawHeader();
+
+    let alt = false;
+    for (const r of rows) {
+      doc.fontSize(FS).font('Helvetica');
+      // Hauteur de ligne dynamique : la plus haute cellule (texte multi-lignes).
+      let cellH = MINH;
+      for (const c of cols) {
+        const v = r[c.key] == null ? '' : String(r[c.key]);
+        const hh = doc.heightOfString(v, { width: c.w - PADX * 2 });
+        if (hh > cellH) cellH = hh;
+      }
+      const rowH = cellH + PADY * 2;
+
+      if (doc.y + rowH > bottom) { doc.addPage(); drawHeader(); alt = false; }
+
+      const y = doc.y;
+      if (alt) doc.rect(left, y, tableW, rowH).fill('#f3f4fb');
+      alt = !alt;
+
+      doc.fillColor('#1c2333').fontSize(FS).font('Helvetica');
+      let x = left;
+      for (const c of cols) {
+        const v = r[c.key] == null ? '' : String(r[c.key]);
+        doc.text(v, x + PADX, y + PADY, { width: c.w - PADX * 2 });
+        x += c.w;
+      }
+      doc.moveTo(left, y + rowH).lineTo(left + tableW, y + rowH).strokeColor('#e4e7ee').lineWidth(0.5).stroke();
+      doc.y = y + rowH;
+    }
+
+    if (!rows.length) {
+      doc.fontSize(10).fillColor('#8b92a6').text('Aucune candidature.', left, doc.y + 8);
+    }
+
+    // Numéros de page en pied (sur chaque page).
+    // On annule temporairement la marge basse, sinon pdfkit ajoute des pages.
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      const oldBottom = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+      doc.font('Helvetica').fontSize(8).fillColor('#8b92a6')
+        .text(`Page ${i + 1} / ${range.count}`, left, doc.page.height - 24, {
+          width: tableW, align: 'right', lineBreak: false,
+        });
+      doc.page.margins.bottom = oldBottom;
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error('export pdf:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur export PDF.' });
+  }
 });
 
 // =========================================================================

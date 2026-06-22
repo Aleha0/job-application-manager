@@ -26,6 +26,8 @@ Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur
 - **Recherche globale** 🔍 : cherche en une fois dans les candidatures, documents et
   notes (étiquettes incluses, insensible aux accents). Accès via le bouton de la
   barre latérale ou le raccourci **Ctrl+K**.
+- **Export** ⬇️ : exporte tes candidatures en **Excel (.xlsx)** ou **PDF** (depuis
+  l'onglet Candidatures), en plus de la sauvegarde complète (.zip avec CSV + JSON).
 - **Mes CVthèques** 🗃️ : liste des plateformes où ton CV est déposé (Indeed,
   LinkedIn, APEC, France Travail…), avec date de dernière mise à jour, CV lié et un
   repère **« à mettre à jour »** (si un CV plus récent existe, ou si la mise à jour

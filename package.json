@@ -20,7 +20,9 @@
     "@anthropic-ai/sdk": "^0.69.0",
     "archiver": "^7.0.1",
     "better-sqlite3": "^11.8.1",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "pdfkit": "^0.15.0"
   }
 }
