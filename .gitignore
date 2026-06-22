@@ -1,6 +1,10 @@
 # Dépendances
 node_modules/
 
+# Variables d'environnement (clé API, secrets…)
+.env
+.env.*
+
 # Base de données et fichiers uploadés (données personnelles)
 data/
 uploads/
