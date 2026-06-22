@@ -101,6 +101,22 @@ Then open your browser at **http://localhost:3000**
 
 > Tip: `npm run dev` automatically restarts the server whenever you change the code.
 
+### One-click launcher (Windows)
+
+Prefer not to type commands? This repo ships two helper scripts:
+
+- **`start-app.sh`** — a Bash script that starts the server, waits until it's ready,
+  and opens the app in your default browser.
+- **`start-app.cmd`** — a Windows launcher that runs the script above through Git
+  Bash, so a plain **double-click** works.
+
+Just double-click **`start-app.cmd`**. To keep it handy, right-click it →
+**Send to → Desktop (create shortcut)** and launch the app from your desktop. Close
+the terminal window to stop it.
+
+> Requires [Git for Windows](https://git-scm.com/download/win) (for Git Bash) and
+> Node.js. Of course, `npm start` still works on any OS.
+
 ## 🔔 Follow-up notifications
 
 ### On your phone (via ntfy — free)

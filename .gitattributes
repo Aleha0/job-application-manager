@@ -1,0 +1,2 @@
+# Keep shell scripts as LF so they run correctly under bash on any OS
+*.sh text eol=lf
