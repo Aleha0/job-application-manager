@@ -1,67 +1,73 @@
-# 🎯 Gestion des candidatures
+# 🎯 Job Application Manager
 
-Application web **100 % locale** pour gérer tes candidatures, tes CV et lettres de
-motivation, et suivre tes relances — avec des **alertes flash** automatiques.
+A local-first web app I built to bring some order to my own job search — track
+applications, store CVs & cover letters, and never miss a follow-up.
 
-Aucune donnée n'est envoyée sur Internet : tout est stocké sur ton ordinateur.
+> 👋 Hi, I'm **Aleha0**. I made this for myself, then polished it to share.
+> Hope it helps your search too!
 
-## ✨ Fonctionnalités
+_100% local · privacy-first · no framework_
 
-- **Tableau de suivi** des candidatures (entreprise, poste, lieu, statut, salaire,
-  type de contrat, **plateforme**, **domaine métier**, recruteur, lien vers l'offre, dates).
-- **Statuts** : À postuler → Envoyée → Relancée → Entretien → Acceptée / Refusée,
-  ainsi que « En réserve » (candidature « on vous recontactera au besoin » —
-  relançable périodiquement) et « Sans réponse » si tu ne souhaites pas relancer.
-- **Rappels de relance** : alerte flash en haut de page, basée sur un délai
-  automatique configurable **et/ou** une date de relance manuelle par candidature.
-- **Documents** : importe tes CV et lettres (PDF, Word, images…) et range-les dans
-  des **dossiers**.
-- **Notes texte** : crée des fichiers texte pour consigner des informations, et
-  rattache-les à une candidature ou à un dossier.
-- **Tableau de bord** avec statistiques.
-- **Statistiques & graphiques** 📈 : chiffres clés (taux de réponse/entretien, délai
-  moyen de réponse), objectif hebdomadaire, candidatures par mois, entonnoir de
-  conversion, répartition par statut/plateforme/lieu, taux d'entretien par plateforme
-  et **par CV** — graphiques 100 % locaux (sans librairie externe).
-- **Recherche globale** 🔍 : cherche en une fois dans les candidatures, documents et
-  notes (étiquettes incluses, insensible aux accents). Accès via le bouton de la
-  barre latérale ou le raccourci **Ctrl+K**.
-- **Export** ⬇️ : exporte tes candidatures en **Excel (.xlsx)** ou **PDF** (depuis
-  l'onglet Candidatures), en plus de la sauvegarde complète (.zip avec CSV + JSON).
-- **Mes CVthèques** 🗃️ : liste des plateformes où ton CV est déposé (Indeed,
-  LinkedIn, APEC, France Travail…), avec date de dernière mise à jour, CV lié et un
-  repère **« à mettre à jour »** (si un CV plus récent existe, ou si la mise à jour
-  date de plus de X mois — configurable). Chaque document indique aussi **sur quelles
-  plateformes il est déposé**, et signale les CV présents sur **aucune** plateforme.
-- **Remplissage auto depuis l'offre** : colle le lien d'une offre et l'app
-  pré-remplit les champs (entreprise, poste, lieu, salaire, contrat…).
-- **Mode sombre** 🌙 : thème clair/sombre, mémorisé entre les sessions.
-- **Notifications de relance** : sur ton téléphone (via ntfy) et/ou sur ton PC
-  (notifications du navigateur).
-- **Étiquettes** 🏷️ : liste d'étiquettes personnalisable (Paramètres), assignables
-  à chaque candidature et utilisables comme filtre dans le tableau.
-- **Date de mise à jour des fichiers** 🕒 : demandée à l'import (et pré-remplie
-  automatiquement depuis les métadonnées du fichier), avec un repère
-  « à vérifier » pour les fichiers de plus de 6 mois — pratique pour savoir si un
-  CV est à jour.
+> 🌍 **Language:** the interface is currently in **French**. An English version is on the way.
 
-## ✨ Remplissage automatique depuis une offre d'emploi
+**Nothing ever leaves your computer.** There's no account, no cloud, no tracker —
+the server listens only on `localhost` (127.0.0.1), so it's never exposed to your
+network. Your applications, CVs and cover letters stay on your machine.
 
-Dans une candidature, colle le lien de l'offre puis clique sur **« ✨ Remplir »** :
+## ✨ Features
 
-1. **Données structurées (gratuit, sans configuration)** — l'app lit le format
-   standard `schema.org/JobPosting` présent sur de nombreux sites (Welcome to the
-   Jungle, pages carrières d'entreprises, certains Indeed/HelloWork…).
-2. **Extraction par IA (optionnelle)** — pour les sites qui ne fournissent pas ces
-   données, tu peux activer Claude. L'app bascule dessus automatiquement si une clé
-   API est configurée.
-3. **Coller le texte** — pour LinkedIn/Indeed (qui bloquent la lecture automatique),
-   clique sur « colle le texte de l'offre » et colle le contenu : l'IA l'analyse.
+- **Tracking table** for your applications (company, role, location, status, salary,
+  contract type, **platform**, **job field**, recruiter, link to the offer, dates).
+- **Statuses**: To apply → Sent → Followed up → Interview → Accepted / Rejected,
+  plus *On hold* ("we'll get back to you when we need someone" — re-pingable
+  periodically) and *No reply* when you don't want to follow up.
+- **Follow-up reminders**: a flash alert at the top of the page, based on a
+  configurable automatic delay **and/or** a manual follow-up date per application.
+- **Documents**: import your CVs and cover letters (PDF, Word, images…) and sort
+  them into **folders**.
+- **Text notes**: jot down information and attach it to an application or a folder.
+- **Dashboard** with key stats.
+- **Statistics & charts** 📈: key figures (reply/interview rate, average reply time),
+  weekly goal, applications per month, conversion funnel, breakdown by
+  status/platform/location, interview rate per platform and **per CV** — all charts
+  rendered locally, with no external library.
+- **Global search** 🔍: search applications, documents and notes at once (tags
+  included, accent-insensitive). Available from the sidebar button or the **Ctrl+K**
+  shortcut.
+- **Export** ⬇️: export your applications to **Excel (.xlsx)** or **PDF** (from the
+  Applications tab), in addition to the full backup (.zip with CSV + JSON).
+- **My CV libraries** 🗃️: a list of the platforms where your CV is posted (Indeed,
+  LinkedIn, APEC, France Travail…), with the last update date, the linked CV and an
+  **"out of date"** flag (if a newer CV exists, or if the update is older than X
+  months — configurable). Each document also shows **which platforms it's posted on**,
+  and flags CVs that aren't on **any** platform.
+- **Auto-fill from a job offer**: paste an offer's link and the app pre-fills the
+  fields (company, role, location, salary, contract…).
+- **Dark mode** 🌙: light/dark theme, remembered between sessions.
+- **Follow-up notifications**: on your phone (via ntfy) and/or on your computer
+  (browser notifications).
+- **Tags** 🏷️: a customizable tag list (Settings), assignable to each application and
+  usable as a filter in the table.
+- **File update date** 🕒: asked on import (and pre-filled automatically from the
+  file's metadata), with a "to check" flag for files older than 6 months — handy to
+  know whether a CV is still up to date.
 
-### Activer l'extraction par IA (facultatif)
+## ✨ Auto-fill from a job offer
 
-Crée une clé API sur [console.anthropic.com](https://console.anthropic.com), puis
-lance l'app avec la variable d'environnement `ANTHROPIC_API_KEY` :
+In an application, paste the offer's link then click **"✨ Fill"**:
+
+1. **Structured data (free, no setup)** — the app reads the standard
+   `schema.org/JobPosting` format present on many sites (Welcome to the Jungle,
+   company career pages, some Indeed/HelloWork listings…).
+2. **AI extraction (optional)** — for sites that don't provide this data, you can
+   enable Claude. The app switches to it automatically if an API key is configured.
+3. **Paste the text** — for LinkedIn/Indeed (which block automated reading), click
+   "paste the offer text" and paste the content: the AI analyzes it.
+
+### Enabling AI extraction (optional)
+
+Create an API key at [console.anthropic.com](https://console.anthropic.com), then
+start the app with the `ANTHROPIC_API_KEY` environment variable:
 
 ```powershell
 # PowerShell (Windows)
@@ -74,77 +80,100 @@ npm start
 ANTHROPIC_API_KEY="sk-ant-..." npm start
 ```
 
-Le modèle utilisé est `claude-opus-4-8` par défaut (modifiable via la variable
-`ANTHROPIC_MODEL`). Le coût par offre est de l'ordre de quelques centimes.
-Sans clé, seules les méthodes 1 et 3 (données structurées) restent disponibles —
-l'app fonctionne donc parfaitement sans aucune configuration.
+The model used is `claude-opus-4-8` by default (configurable via the
+`ANTHROPIC_MODEL` variable). The cost per offer is around a few cents. Without a key,
+only methods 1 and 3 (structured data) remain available — so the app works perfectly
+fine with no configuration at all.
 
-## 🚀 Installation & lancement
+## 🚀 Installation & run
 
-Prérequis : [Node.js](https://nodejs.org/) (version 18 ou plus).
+Requirements: [Node.js](https://nodejs.org/) (version 18 or higher).
 
 ```bash
-# 1. Installer les dépendances (une seule fois)
+# 1. Install dependencies (once)
 npm install
 
-# 2. Lancer l'application
+# 2. Start the app
 npm start
 ```
 
-Puis ouvre ton navigateur sur **http://localhost:3000**
+Then open your browser at **http://localhost:3000**
 
-> Astuce : `npm run dev` relance automatiquement le serveur à chaque modification du code.
+> Tip: `npm run dev` automatically restarts the server whenever you change the code.
 
-## 🔔 Notifications de relance
+## 🔔 Follow-up notifications
 
-### Sur ton téléphone (via ntfy — gratuit)
+### On your phone (via ntfy — free)
 
-1. Installe l'app **ntfy** ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) /
+1. Install the **ntfy** app ([Android](https://play.google.com/store/apps/details?id=io.heckel.ntfy) /
    [F-Droid](https://f-droid.org/packages/io.heckel.ntfy/) / iOS App Store).
-2. Dans l'app, abonne-toi à un **sujet** au nom unique et difficile à deviner
-   (ex : `relances-candidatures-7gK9pZ2q`).
-3. Dans l'app web → **Paramètres → Notifications**, saisis le même sujet
-   (le bouton **🎲 Générer** en propose un), clique **Tester**, puis **Enregistrer**.
+2. In the app, subscribe to a **topic** with a unique, hard-to-guess name
+   (e.g. `follow-ups-7gK9pZ2q`).
+3. In the web app → **Settings → Notifications**, enter the same topic (the
+   **🎲 Generate** button suggests one), click **Test**, then **Save**.
 
-Le serveur envoie un récap des relances une fois par jour (au plus) quand l'app
-tourne. Les messages sont neutres (« 3 candidatures à relancer ») — aucune donnée
-sensible ne transite.
+The server sends a follow-up summary at most once a day while the app is running.
+Messages are neutral ("3 applications to follow up") — no sensitive data is sent.
 
-> 🔒 Sur le service public `ntfy.sh`, le nom du sujet fait office de mot de passe :
-> choisis-le long et aléatoire. Pour un usage 100 % privé, tu peux héberger ton
-> propre serveur ntfy et renseigner son adresse dans le réglage `ntfy_server`.
+> 🔒 On the public `ntfy.sh` service, the topic name acts as a password: choose it
+> long and random. For fully private use, you can self-host your own ntfy server and
+> set its address in the `ntfy_server` setting.
 
-### Sur ton PC (navigateur)
+### On your computer (browser)
 
-Dans **Paramètres → Notifications**, clique sur **Activer les notifications
-navigateur**. Tu recevras une notification système (quand l'app est ouverte) s'il
-y a des relances en attente.
+In **Settings → Notifications**, click **Enable browser notifications**. You'll get a
+system notification (while the app is open) whenever follow-ups are pending.
 
-## 💾 Où sont mes données ?
+## 💾 Backup & where is my data?
 
-- Base de données : `data/gestion.db` (SQLite)
-- Fichiers importés : dossier `uploads/`
+The easiest way to save everything is the **Backup** button in **Settings**: it
+generates a `.zip` archive containing your database, your imported files, and a
+CSV + JSON export of your applications (reusable by other tools).
 
-Pour **sauvegarder** toutes tes données, il suffit de copier ces deux dossiers.
-Ils sont ignorés par Git (`.gitignore`) pour rester privés.
+Under the hood, your data lives in two folders:
 
-## 🛠️ Stack technique
+- Database: `data/gestion.db` (SQLite)
+- Imported files: the `uploads/` folder
 
-- **Backend** : Node.js + Express + SQLite (better-sqlite3)
-- **Upload** : multer
-- **Frontend** : HTML / CSS / JavaScript (sans framework, sans étape de build)
+You can also back up by simply copying these two folders by hand. Either way, both
+are ignored by Git (`.gitignore`), so your data always stays private.
 
-## 📁 Structure du projet
+## 🔒 Privacy & security
+
+- The server binds to `127.0.0.1` only — never exposed on your network (override with
+  the `GC_HOST` environment variable if you really need to).
+- No telemetry, no third-party calls (except the optional AI extraction you enable
+  yourself, and ntfy notifications if you set them up).
+- Security headers (CSP, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`), uploaded files are served safely (download for risky types),
+  and outbound URL fetching is guarded against SSRF.
+
+## 🛠️ Tech stack
+
+- **Backend**: Node.js + Express + SQLite (better-sqlite3)
+- **Upload**: multer
+- **Frontend**: HTML / CSS / JavaScript (no framework, no build step)
+
+## 📁 Project structure
 
 ```
 gestion-candidatures/
-├── server.js          # Serveur Express + API REST
-├── db.js              # Connexion SQLite + schéma
+├── server.js          # Express server + REST API
+├── db.js              # SQLite connection + schema
 ├── package.json
 ├── public/            # Frontend
 │   ├── index.html
 │   ├── css/style.css
 │   └── js/app.js
-├── data/              # Base de données (généré, ignoré par git)
-└── uploads/           # Fichiers importés (généré, ignoré par git)
+├── data/              # Database (generated, git-ignored)
+└── uploads/           # Imported files (generated, git-ignored)
 ```
+
+## 📄 License
+
+This project is released under the [MIT](LICENSE) license — free to use, modify and
+redistribute.
+
+---
+
+Made with ❤️ by **Aleha0**
