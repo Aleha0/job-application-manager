@@ -199,6 +199,19 @@ db.exec(`
     PRIMARY KEY (cvtheque_id, document_id)
   );
 `);
+// Historique des relances liées à une candidature (une candidature -> N relances).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS relances (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidature_id INTEGER NOT NULL REFERENCES candidatures(id) ON DELETE CASCADE,
+    date           TEXT NOT NULL,                  -- date de la relance (YYYY-MM-DD)
+    canal          TEXT,                           -- mail | telephone | linkedin | autre
+    note           TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_relances_candidature ON relances(candidature_id);
+`);
+
 // Migration : déplace l'ancien lien unique cv_document_id vers la table de liaison.
 const cvthLegacy = db
   .prepare('SELECT id, cv_document_id FROM cvtheques WHERE cv_document_id IS NOT NULL')

@@ -45,6 +45,9 @@ const STATUTS = [
 // Statuts pour lesquels une relance a encore du sens.
 const STATUTS_RELANCABLES = ['Envoyée', 'Relancée', 'En réserve'];
 
+// Canaux possibles pour une relance.
+const RELANCE_CANAUX = ['mail', 'telephone', 'linkedin', 'autre'];
+
 // --- Middlewares ----------------------------------------------------------
 
 // En-têtes de sécurité (anti-sniff, anti-clickjacking, CSP adaptée à l'app).
@@ -114,6 +117,23 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Vrai si `s` est une date calendaire réelle au format YYYY-MM-DD
+// (rejette p. ex. 2026-13-45 que la simple regex laisserait passer).
+function isValidISODate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || '')) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d) && d.toISOString().slice(0, 10) === s;
+}
+
+// Ajoute `days` jours à une date ISO (YYYY-MM-DD) sans dérive de fuseau :
+// tout le calcul se fait en UTC, donc le résultat = base + days exactement.
+function addDaysISO(iso, days) {
+  const d = new Date(iso + 'T00:00:00Z');
+  if (isNaN(d)) return null;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // --- Étiquettes -----------------------------------------------------------
 
 function parseTags(s) {
@@ -143,25 +163,54 @@ function daysBetween(fromISO, toISO) {
 }
 
 // Calcule, pour une candidature, si elle doit être relancée + la date prévue.
-function computeRelance(c, delaiJours) {
+// `lastRelance` (date ISO ou null) = date de la dernière relance enregistrée.
+function computeRelance(c, delaiJours, lastRelance) {
   if (!STATUTS_RELANCABLES.includes(c.statut)) {
     return { dueDate: null, aRelancer: false, joursRetard: 0 };
   }
   let dueDate = null;
   if (c.date_relance) {
+    // Date de relance prévue, posée manuellement : prioritaire.
     dueDate = c.date_relance;
   } else {
-    // Base : date de candidature (ou date de création si absente) + délai.
-    const base = c.date_candidature || (c.created_at || '').slice(0, 10);
-    if (base) {
-      const d = new Date(base + 'T00:00:00');
-      d.setDate(d.getDate() + delaiJours);
-      dueDate = d.toISOString().slice(0, 10);
-    }
+    // Base : dernière relance faite si elle existe, sinon date de
+    // candidature (ou date de création), puis + le délai configuré.
+    const base = lastRelance || c.date_candidature || (c.created_at || '').slice(0, 10);
+    if (base) dueDate = addDaysISO(base, delaiJours);
   }
   if (!dueDate) return { dueDate: null, aRelancer: false, joursRetard: 0 };
   const retard = daysBetween(dueDate, todayISO());
   return { dueDate, aRelancer: retard >= 0, joursRetard: retard };
+}
+
+// Map candidature_id -> { count, last } (dernière relance enregistrée).
+function relanceAgg() {
+  const m = new Map();
+  for (const r of db
+    .prepare('SELECT candidature_id, COUNT(*) AS count, MAX(date) AS last FROM relances GROUP BY candidature_id')
+    .all()) {
+    m.set(r.candidature_id, { count: r.count, last: r.last });
+  }
+  return m;
+}
+
+// Map candidature_id -> tableau des relances (plus récentes d'abord).
+function relancesMap() {
+  const m = new Map();
+  for (const r of db.prepare('SELECT * FROM relances ORDER BY date DESC, id DESC').all()) {
+    if (!m.has(r.candidature_id)) m.set(r.candidature_id, []);
+    m.get(r.candidature_id).push(r);
+  }
+  return m;
+}
+
+// Renvoie une candidature enrichie (tags, relances, état de relance).
+function enrichCandidature(c, delai, relancesArr) {
+  const rel =
+    relancesArr ||
+    db.prepare('SELECT * FROM relances WHERE candidature_id = ? ORDER BY date DESC, id DESC').all(c.id);
+  const last = rel.length ? rel[0].date : null;
+  return { ...c, tags: parseTags(c.tags), relances: rel, relance: computeRelance(c, delai, last) };
 }
 
 // =========================================================================
@@ -175,11 +224,8 @@ app.get(
       .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
       .all();
     const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
-    const enriched = rows.map((c) => ({
-      ...c,
-      tags: parseTags(c.tags),
-      relance: computeRelance(c, delai),
-    }));
+    const relMap = relancesMap();
+    const enriched = rows.map((c) => enrichCandidature(c, delai, relMap.get(c.id) || []));
     res.json(enriched);
   })
 );
@@ -330,6 +376,51 @@ app.delete(
 );
 
 // =========================================================================
+//  API : RELANCES (historique des relances d'une candidature)
+// =========================================================================
+
+// Enregistre une relance effectuée : crée l'événement, passe le statut à
+// « Relancée » et consomme la date de relance prévue (date_relance).
+app.post(
+  '/api/candidatures/:id/relances',
+  asyncRoute((req, res) => {
+    const id = Number(req.params.id);
+    const cand = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
+    if (!cand) return res.status(404).json({ error: 'Candidature introuvable.' });
+    const b = req.body || {};
+    const date = isValidISODate(b.date) ? b.date : todayISO();
+    const canal = RELANCE_CANAUX.includes(b.canal) ? b.canal : null;
+    const note = b.note ? String(b.note).trim().slice(0, 2000) || null : null;
+    db.prepare('INSERT INTO relances (candidature_id, date, canal, note) VALUES (?, ?, ?, ?)')
+      .run(id, date, canal, note);
+    // Passe le statut à « Relancée », SAUF si la candidature a déjà avancé
+    // (entretien obtenu, acceptée, refusée) : on ne régresse pas son état.
+    const STATUTS_AVANCES = ['Entretien', 'Acceptée', 'Refusée'];
+    const nouveauStatut = STATUTS_AVANCES.includes(cand.statut) ? cand.statut : 'Relancée';
+    db.prepare(
+      "UPDATE candidatures SET statut = ?, date_relance = NULL, updated_at = datetime('now') WHERE id = ?"
+    ).run(nouveauStatut, id);
+    const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+    const updated = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
+    res.status(201).json(enrichCandidature(updated, delai));
+  })
+);
+
+// Supprime une relance (correction de saisie). Ne modifie pas le statut.
+app.delete(
+  '/api/candidatures/:id/relances/:rid',
+  asyncRoute((req, res) => {
+    const id = Number(req.params.id);
+    const rid = Number(req.params.rid);
+    const cand = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
+    if (!cand) return res.status(404).json({ error: 'Candidature introuvable.' });
+    db.prepare('DELETE FROM relances WHERE id = ? AND candidature_id = ?').run(rid, id);
+    const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+    res.json(enrichCandidature(cand, delai));
+  })
+);
+
+// =========================================================================
 //  API : RAPPELS (relances) + STATS
 // =========================================================================
 
@@ -337,9 +428,10 @@ app.get(
   '/api/reminders',
   asyncRoute((req, res) => {
     const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+    const agg = relanceAgg();
     const rows = db.prepare('SELECT * FROM candidatures').all();
     const reminders = rows
-      .map((c) => ({ ...c, relance: computeRelance(c, delai) }))
+      .map((c) => ({ ...c, relance: computeRelance(c, delai, (agg.get(c.id) || {}).last) }))
       .filter((c) => c.relance.aRelancer)
       .sort((a, b) => b.relance.joursRetard - a.relance.joursRetard);
     res.json({ delai, reminders });
@@ -512,11 +604,12 @@ app.get(
     }
 
     const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+    const relMap = relancesMap();
 
     const candidatures = db
       .prepare('SELECT * FROM candidatures')
       .all()
-      .map((c) => ({ ...c, tags: parseTags(c.tags), relance: computeRelance(c, delai) }))
+      .map((c) => enrichCandidature(c, delai, relMap.get(c.id) || []))
       .filter((c) =>
         normalizeStr(
           [c.entreprise, c.poste, c.lieu, c.recruteur_nom, c.recruteur_email,
@@ -1042,16 +1135,20 @@ function csvCell(v) {
 
 // Construit le CSV des candidatures (en-têtes FR, séparateur ;).
 function buildCandidaturesCsv(rows) {
+  const agg = relanceAgg();
   const headers = [
     'Entreprise', 'Poste', 'Lieu', 'Statut', 'Type de contrat', 'Plateforme',
     'Salaire', 'Date de candidature', 'Date de relance', 'Date de réponse',
+    'Nb relances', 'Dernière relance',
     'Recruteur', 'Email recruteur', "Lien de l'offre", 'Étiquettes',
   ];
   const lines = [headers.join(';')];
   for (const c of rows) {
+    const r = agg.get(c.id) || { count: 0, last: '' };
     lines.push([
       c.entreprise, c.poste, c.lieu, c.statut, c.type_contrat, c.plateforme,
       c.salaire, c.date_candidature, c.date_relance, c.date_reponse,
+      r.count, r.last || '',
       c.recruteur_nom, c.recruteur_email, c.lien_offre, parseTags(c.tags).join(', '),
     ].map(csvCell).join(';'));
   }
@@ -1091,6 +1188,7 @@ app.get('/api/backup', (req, res) => {
       version: pkg.version,
       exported_at: new Date().toISOString(),
       candidatures: candidatures.map((c) => ({ ...c, tags: parseTags(c.tags) })),
+      relances: db.prepare('SELECT * FROM relances').all(),
       documents: db.prepare('SELECT * FROM documents').all(),
       notes: db.prepare('SELECT * FROM notes').all(),
       folders: db.prepare('SELECT * FROM folders').all(),
@@ -1123,6 +1221,8 @@ const EXPORT_COLS = [
   { header: 'Date candidature', key: 'date_candidature', width: 16 },
   { header: 'Date relance', key: 'date_relance', width: 14 },
   { header: 'Date réponse', key: 'date_reponse', width: 14 },
+  { header: 'Nb relances', key: 'nb_relances', width: 11 },
+  { header: 'Dernière relance', key: 'derniere_relance', width: 16 },
   { header: 'Recruteur', key: 'recruteur_nom', width: 18 },
   { header: 'Email recruteur', key: 'recruteur_email', width: 22 },
   { header: "Lien de l'offre", key: 'lien_offre', width: 30 },
@@ -1130,10 +1230,14 @@ const EXPORT_COLS = [
 ];
 
 function candidaturesForExport() {
+  const agg = relanceAgg();
   return db
     .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
     .all()
-    .map((c) => ({ ...c, tags: parseTags(c.tags).join(', ') }));
+    .map((c) => {
+      const r = agg.get(c.id) || { count: 0, last: '' };
+      return { ...c, tags: parseTags(c.tags).join(', '), nb_relances: r.count, derniere_relance: r.last || '' };
+    });
 }
 
 app.get('/api/export/excel', async (req, res) => {
@@ -1589,9 +1693,10 @@ async function checkAndNotify(force = false) {
   const topic = (getSetting('ntfy_topic', '') || '').trim();
   if (!topic) return;
   const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
+  const agg = relanceAgg();
   const rows = db.prepare('SELECT * FROM candidatures').all();
   const reminders = rows
-    .map((c) => ({ ...c, relance: computeRelance(c, delai) }))
+    .map((c) => ({ ...c, relance: computeRelance(c, delai, (agg.get(c.id) || {}).last) }))
     .filter((c) => c.relance.aRelancer);
   if (!reminders.length) return;
 

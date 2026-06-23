@@ -64,6 +64,14 @@ const FOLDER_TYPE = {
   autre: { ico: '📁', label: 'Autre' },
 };
 
+// Libellés des canaux de relance.
+const CANAL_LABEL = {
+  mail: '📧 E-mail',
+  telephone: '📞 Téléphone',
+  linkedin: '💼 LinkedIn',
+  autre: '✉️ Autre',
+};
+
 /* ===================================================================== */
 /*  Utilitaires UI                                                       */
 /* ===================================================================== */
@@ -398,7 +406,10 @@ async function renderFlash() {
       return `
         <li>
           <span>📌 <strong>${esc(c.entreprise)}</strong> — ${esc(c.poste)} (${txt})</span>
-          <button class="mini-link" data-relance-edit="${c.id}">Gérer</button>
+          <span class="inline" style="gap:8px">
+            <button class="mini-link" data-relance-done="${c.id}">✓ Relance faite</button>
+            <button class="mini-link" data-relance-edit="${c.id}">Gérer</button>
+          </span>
         </li>`;
     })
     .join('');
@@ -1087,6 +1098,7 @@ async function candidatureModal(c = null) {
         </div>
       </form>
 
+      ${isEdit ? relancesSectionHTML(c) : ''}
       ${isEdit ? linkedItemsHTML(c.id) : ''}
     </div>
     <div class="modal-foot">
@@ -1096,7 +1108,10 @@ async function candidatureModal(c = null) {
     </div>
   `, { large: true });
 
-  if (isEdit) loadLinkedItems(c.id);
+  if (isEdit) {
+    loadLinkedItems(c.id);
+    wireRelances(c);
+  }
 
   $('#saveCandidature').addEventListener('click', async () => {
     const form = $('#candidatureForm');
@@ -1191,6 +1206,112 @@ function applyOfferFields(f) {
     }
   }
   return filled;
+}
+
+/* --- Relances dans la modale candidature --------------------------- */
+function relancesSectionHTML(c) {
+  return `
+    <hr style="border:none;border-top:1px solid var(--border);margin:22px 0 18px" />
+    <div class="inline" style="justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0">🔁 Relances</h3>
+      <button class="btn btn-sm btn-secondary" id="btnAddRelance" type="button">+ Relance faite</button>
+    </div>
+    <form id="relanceForm" class="relance-form hidden">
+      <div class="form-grid">
+        <div class="field">
+          <label>Date de la relance</label>
+          <input class="input" type="date" name="date" value="${esc(todayLocalISO())}" />
+        </div>
+        <div class="field">
+          <label>Canal</label>
+          <select class="input" name="canal">
+            <option value="">—</option>
+            <option value="mail">📧 E-mail</option>
+            <option value="telephone">📞 Téléphone</option>
+            <option value="linkedin">💼 LinkedIn</option>
+            <option value="autre">✉️ Autre</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>Note <span class="hint">(optionnel)</span></label>
+          <input class="input" name="note" placeholder="ex: relancé par mail, en attente de retour" />
+        </div>
+      </div>
+      <div class="inline" style="justify-content:flex-end;gap:8px;margin-top:8px">
+        <button type="button" class="btn btn-sm btn-secondary" id="btnCancelRelance">Annuler</button>
+        <button type="button" class="btn btn-sm btn-primary" id="btnSaveRelance">Enregistrer la relance</button>
+      </div>
+    </form>
+    <div id="relancesList">${relancesListHTML(c.relances || [], c.id)}</div>`;
+}
+
+function relancesListHTML(relances, candId) {
+  if (!relances.length) {
+    return `<span class="muted">Aucune relance enregistrée. Quand tu relances, clique sur « + Relance faite ».</span>`;
+  }
+  const items = relances
+    .map(
+      (r) => `
+      <li class="relance-item">
+        <span class="relance-dot">🔁</span>
+        <div class="relance-body">
+          <div><strong>${fmtDate(r.date)}</strong>${r.canal ? ` · ${CANAL_LABEL[r.canal] || esc(r.canal)}` : ''}</div>
+          ${r.note ? `<div class="cell-sub">${esc(r.note)}</div>` : ''}
+        </div>
+        <button class="btn-icon" data-del-relance="${r.id}" data-relance-cand="${candId}" title="Supprimer cette relance">🗑️</button>
+      </li>`
+    )
+    .join('');
+  return `<ul class="relance-timeline">${items}</ul>`;
+}
+
+// Branche les boutons de la section relances dans la modale candidature.
+function wireRelances(c) {
+  const form = $('#relanceForm');
+  $('#btnAddRelance')?.addEventListener('click', () => {
+    form?.classList.toggle('hidden');
+    if (form && !form.classList.contains('hidden')) form.querySelector('[name="canal"]')?.focus();
+  });
+  $('#btnCancelRelance')?.addEventListener('click', () => form?.classList.add('hidden'));
+  $('#btnSaveRelance')?.addEventListener('click', async () => {
+    const data = Object.fromEntries(new FormData(form).entries());
+    try {
+      const updated = await api(`/api/candidatures/${c.id}/relances`, { method: 'POST', body: data });
+      applyCandidatureRelances(updated);
+      toast('Relance enregistrée');
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  });
+}
+
+// Applique une candidature mise à jour (après ajout/suppression de relance) :
+// rafraîchit l'état global, la modale ouverte et les vues dépendantes.
+function applyCandidatureRelances(updated) {
+  if (!updated || !updated.id) return;
+  const idx = State.candidatures.findIndex((x) => x.id === updated.id);
+  if (idx >= 0) State.candidatures[idx] = updated;
+
+  // Section relances dans la modale (si encore ouverte).
+  const list = $('#relancesList');
+  if (list) list.innerHTML = relancesListHTML(updated.relances || [], updated.id);
+  const form = $('#relanceForm');
+  if (form) {
+    form.reset();
+    form.classList.add('hidden');
+    const d = form.querySelector('[name="date"]');
+    if (d) d.value = todayLocalISO();
+  }
+  // Le statut a pu passer à « Relancée » et la date de relance prévue être effacée.
+  const statutSel = $('#candidatureForm [name="statut"]');
+  if (statutSel) statutSel.value = updated.statut;
+  const dr = $('#candidatureForm [name="date_relance"]');
+  if (dr) dr.value = (updated.date_relance || '').slice(0, 10);
+
+  // Vues dépendantes.
+  renderFlash();
+  if (State.view === 'candidatures') renderCandidatures();
+  if (State.view === 'dashboard') renderDashboard();
 }
 
 /* --- Éléments liés (docs + notes) dans la modale candidature -------- */
@@ -2313,7 +2434,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit],[data-open-cvtheque],[data-del-cvtheque],[data-cvtheque-maj]');
+  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit],[data-relance-done],[data-del-relance],[data-open-cvtheque],[data-del-cvtheque],[data-cvtheque-maj]');
   if (!t) return;
 
   // Navigation
@@ -2354,6 +2475,37 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.relanceEdit) {
     const c = State.candidatures.find((x) => x.id === Number(t.dataset.relanceEdit));
     if (c) candidatureModal(c);
+    return;
+  }
+  if (t.dataset.relanceDone) {
+    const id = Number(t.dataset.relanceDone);
+    try {
+      const updated = await api(`/api/candidatures/${id}/relances`, {
+        method: 'POST',
+        body: { date: todayLocalISO() },
+      });
+      applyCandidatureRelances(updated);
+      toast('Relance enregistrée');
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+    return;
+  }
+  if (t.dataset.delRelance) {
+    const rid = Number(t.dataset.delRelance);
+    const candId = Number(t.dataset.relanceCand);
+    if (await confirmDialog({
+      title: 'Supprimer la relance',
+      message: 'Supprimer cette relance de l\'historique ? Le statut de la candidature n\'est pas modifié.',
+    })) {
+      try {
+        const updated = await api(`/api/candidatures/${candId}/relances/${rid}`, { method: 'DELETE' });
+        applyCandidatureRelances(updated);
+        toast('Relance supprimée');
+      } catch (err) {
+        toast(err.message, 'err');
+      }
+    }
     return;
   }
 
