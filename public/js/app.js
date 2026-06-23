@@ -106,6 +106,14 @@ function fmtDate(iso) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Date + heure (created_at/updated_at sont en UTC : "YYYY-MM-DD HH:MM:SS").
+function fmtDateTime(s) {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return s;
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return bytes + ' o';
@@ -1196,6 +1204,7 @@ async function candidatureModal(c = null) {
       </form>
 
       ${isEdit ? relancesSectionHTML(c) : ''}
+      ${isEdit ? notesFilHTML(c.id) : ''}
       ${isEdit ? linkedItemsHTML(c.id) : ''}
     </div>
     <div class="modal-foot">
@@ -1207,7 +1216,9 @@ async function candidatureModal(c = null) {
 
   if (isEdit) {
     loadLinkedItems(c.id);
+    loadNotesFil(c.id);
     wireRelances(c);
+    wireNotesFil(c);
   }
 
   $('#saveCandidature').addEventListener('click', async () => {
@@ -1416,11 +1427,8 @@ function linkedItemsHTML(id) {
   return `
     <hr style="border:none;border-top:1px solid var(--border);margin:22px 0 18px" />
     <div class="inline" style="justify-content:space-between;margin-bottom:12px">
-      <h3 style="margin:0">📎 Documents & notes liés</h3>
-      <div class="inline">
-        <button class="btn btn-sm btn-secondary" data-link-note="${id}">+ Note</button>
-        <button class="btn btn-sm btn-secondary" data-link-upload="${id}">⬆ Fichier</button>
-      </div>
+      <h3 style="margin:0">📎 Documents liés</h3>
+      <button class="btn btn-sm btn-secondary" data-link-upload="${id}">⬆ Fichier</button>
     </div>
     <div id="linkedItems"><span class="muted">Chargement…</span></div>`;
 }
@@ -1428,15 +1436,12 @@ function linkedItemsHTML(id) {
 async function loadLinkedItems(id) {
   const box = $('#linkedItems');
   if (!box) return;
-  const [docs, notes] = await Promise.all([
-    api(`/api/documents?candidature_id=${id}`),
-    api(`/api/notes?candidature_id=${id}`),
-  ]);
-  if (!docs.length && !notes.length) {
-    box.innerHTML = `<span class="muted">Aucun document ni note pour le moment.</span>`;
+  const docs = await api(`/api/documents?candidature_id=${id}`);
+  if (!docs.length) {
+    box.innerHTML = `<span class="muted">Aucun document lié.</span>`;
     return;
   }
-  const docHtml = docs
+  box.innerHTML = docs
     .map(
       (d) => `
       <div class="inline" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -1449,19 +1454,120 @@ async function loadLinkedItems(id) {
       </div>`
     )
     .join('');
-  const noteHtml = notes
-    .map(
-      (n) => `
-      <div class="inline" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span>📝 ${esc(n.titre)}</span>
-        <span class="inline">
-          <button class="btn-icon" data-open-note="${n.id}" title="Ouvrir">✏️</button>
-          <button class="btn-icon" data-del-note="${n.id}" data-reload-candidature="${id}" title="Supprimer">🗑️</button>
+}
+
+/* --- Fil de notes (dans la fiche candidature) ---------------------- */
+function notesFilHTML(id) {
+  return `
+    <hr style="border:none;border-top:1px solid var(--border);margin:22px 0 14px" />
+    <h3 style="margin:0 0 12px">💬 Notes</h3>
+    <div id="notesFil" class="notes-fil"><span class="muted">Chargement…</span></div>
+    <form id="noteFilForm" class="note-fil-form" autocomplete="off">
+      <textarea id="noteFilInput" class="input" rows="2" placeholder="Ajouter une note…  (Ctrl+Entrée pour envoyer)"></textarea>
+      <button type="button" class="btn btn-primary" id="btnAddNote">Ajouter</button>
+    </form>`;
+}
+
+function noteBubbleHTML(n) {
+  const hasTitre = n.titre && !['', 'Sans titre', 'Note'].includes(n.titre);
+  const edited = n.updated_at && n.updated_at !== n.created_at ? ' · modifiée' : '';
+  return `
+    <div class="note-bubble" data-note-id="${n.id}">
+      <div class="note-bubble-main">
+        ${hasTitre ? `<div class="note-bubble-titre">${esc(n.titre)}</div>` : ''}
+        <div class="note-bubble-text">${esc(n.contenu).replace(/\n/g, '<br>')}</div>
+      </div>
+      <div class="note-bubble-foot">
+        <span class="note-bubble-date">${fmtDateTime(n.created_at)}${edited}</span>
+        <span class="note-bubble-actions">
+          <button class="btn-icon" data-edit-note-fil="${n.id}" title="Modifier">✏️</button>
+          <button class="btn-icon" data-del-note-fil="${n.id}" title="Supprimer">🗑️</button>
         </span>
-      </div>`
-    )
-    .join('');
-  box.innerHTML = docHtml + noteHtml;
+      </div>
+    </div>`;
+}
+
+async function loadNotesFil(id) {
+  const box = $('#notesFil');
+  if (!box) return;
+  let notes = [];
+  try { notes = await api(`/api/notes?candidature_id=${id}`); } catch {}
+  // Ordre chronologique (plus ancienne en haut, plus récente en bas — style chat).
+  notes.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '') || a.id - b.id);
+  box.innerHTML = notes.length
+    ? notes.map(noteBubbleHTML).join('')
+    : `<div class="notes-fil-empty muted">Aucune note. Écris ta première note ci-dessous 👇</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+
+function wireNotesFil(c) {
+  const id = c.id;
+  const input = $('#noteFilInput');
+  const add = async () => {
+    const contenu = (input.value || '').trim();
+    if (!contenu) return;
+    try {
+      await api('/api/notes', { method: 'POST', body: { candidature_id: id, contenu } });
+      input.value = '';
+      await loadNotesFil(id);
+      refreshFolders().catch(() => {});
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  };
+  $('#btnAddNote')?.addEventListener('click', add);
+  input?.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); add(); }
+  });
+
+  // Édition / suppression déléguées sur le conteneur (persiste aux re-rendus).
+  $('#notesFil')?.addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('[data-edit-note-fil]');
+    if (editBtn) { startEditNote(editBtn.closest('.note-bubble'), id); return; }
+    const delBtn = e.target.closest('[data-del-note-fil]');
+    if (delBtn) {
+      const nid = Number(delBtn.dataset.delNoteFil);
+      if (await confirmDialog({ title: 'Supprimer la note', message: 'Supprimer cette note définitivement ?' })) {
+        try {
+          await api(`/api/notes/${nid}`, { method: 'DELETE' });
+          await loadNotesFil(id);
+          refreshFolders().catch(() => {});
+        } catch (err) {
+          toast(err.message, 'err');
+        }
+      }
+      return;
+    }
+  });
+}
+
+// Passe une bulle de note en mode édition inline.
+function startEditNote(bubble, candId) {
+  if (!bubble) return;
+  const nid = bubble.dataset.noteId;
+  const textEl = bubble.querySelector('.note-bubble-text');
+  const current = textEl ? textEl.innerText : '';
+  const main = bubble.querySelector('.note-bubble-main');
+  main.innerHTML = `
+    <textarea class="input note-edit-input" rows="2">${esc(current)}</textarea>
+    <div class="inline" style="gap:8px;margin-top:6px">
+      <button class="btn btn-sm btn-primary" data-save-note>Enregistrer</button>
+      <button class="btn btn-sm btn-secondary" data-cancel-note>Annuler</button>
+    </div>`;
+  const ta = main.querySelector('textarea');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  main.querySelector('[data-save-note]').addEventListener('click', async () => {
+    const contenu = ta.value.trim();
+    if (!contenu) { toast('La note ne peut pas être vide', 'err'); return; }
+    try {
+      await api(`/api/notes/${nid}`, { method: 'PUT', body: { contenu } });
+      await loadNotesFil(candId);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  });
+  main.querySelector('[data-cancel-note]').addEventListener('click', () => loadNotesFil(candId));
 }
 
 /* ===================================================================== */
@@ -1513,10 +1619,13 @@ async function renderDocsContent() {
     docQuery = `?folder_id=${State.currentFolder}`;
     noteQuery = `?folder_id=${State.currentFolder}`;
   }
-  const [docs, notes] = await Promise.all([
+  const [docs, allNotes] = await Promise.all([
     api('/api/documents' + docQuery),
     api('/api/notes' + noteQuery),
   ]);
+  // Les notes liées à une candidature vivent uniquement dans la fiche candidature
+  // (fil de discussion) : on ne les affiche plus ici.
+  const notes = allNotes.filter((n) => !n.candidature_id);
 
   if (!docs.length && !notes.length) {
     box.innerHTML = emptyState('📂', 'Dossier vide', 'Importe un fichier ou crée une note texte.');
