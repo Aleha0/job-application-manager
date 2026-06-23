@@ -642,9 +642,10 @@ html[data-theme="dark"] .tag-pick-item:has(input:checked) {
 /* --- Barre de filtres des candidatures --- */
 .filter-bar {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 /* Groupe de filtre labellisé (Statut / Étiquette) pour ne pas confondre */
@@ -714,6 +715,7 @@ html[data-theme="dark"] .tagfilter.active { color: #fff; background: hsl(var(--t
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1 1 240px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1189,6 +1191,124 @@ select.input option { background: var(--surface); color: var(--text); padding: 8
 .toast.ok { background: #15803d; }
 .toast.err { background: #b91c1c; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ===================================================================== */
+/*  Filtres : boutons-menus (.fdrop) + pastilles actives                 */
+/* ===================================================================== */
+.filter-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.fdrop { position: relative; }
+.fdrop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.fdrop-btn:hover { border-color: var(--primary); }
+.fdrop-btn.active { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.fdrop-on { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.fdrop-caret { color: var(--muted); font-size: 0.75rem; transition: transform 0.18s; }
+.fdrop.open .fdrop-caret { transform: rotate(180deg); }
+
+.fdrop-menu {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+.fdrop.open .fdrop-menu { display: block; animation: pop 0.12s ease; }
+.fdrop-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.fdrop-opt:hover { background: var(--surface-2); }
+.fdrop-opt.selected { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.fdrop-count { font-size: 0.75rem; color: var(--muted); }
+.fdrop-opt.selected .fdrop-count { color: var(--primary); }
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.active-filters-label { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+.active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.active-pill:hover { border-color: var(--primary); }
+.active-pill-x { font-size: 0.95rem; line-height: 1; }
+.active-clear {
+  border: none;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.active-clear:hover { color: var(--text); }
+
+/* ===================================================================== */
+/*  Sélecteur de tri (liste candidatures)                                */
+/* ===================================================================== */
+.sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.sort-control select.input {
+  width: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 0.85rem;
+}
 
 /* ===================================================================== */
 /*  Documentation (vue)                                                  */

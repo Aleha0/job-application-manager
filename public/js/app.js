@@ -31,6 +31,8 @@ const State = {
   currentFolder: 'all',     // 'all' | 'none' | folderId
   filterStatut: '',         // '' = tous, sinon un statut
   filterTag: '',            // '' = toutes, sinon une étiquette
+  filterDomaine: '',        // '' = tous, sinon un domaine
+  sortBy: 'date',           // 'date' | 'activite' | 'relance'
   aiAvailable: false,       // IA d'extraction activée (clé API présente)
   view: 'dashboard',
 };
@@ -464,7 +466,20 @@ async function renderDashboard() {
 
   $('#sidebarStats').textContent = `${stats.total} candidature${stats.total > 1 ? 's' : ''}`;
 
-  const recent = State.candidatures.slice(0, 6);
+  // Ordre de priorité : À postuler > à relancer > Envoyée > le reste ;
+  // à priorité égale, les plus récentes d'abord.
+  const rank = (c) => {
+    if (c.statut === 'À postuler') return 0;
+    if (c.relance && c.relance.aRelancer) return 1;
+    if (c.statut === 'Envoyée') return 2;
+    return 3;
+  };
+  const recent = [...State.candidatures]
+    .sort((a, b) => rank(a) - rank(b)
+      || (rank(a) === 1 ? (b.relance.joursRetard - a.relance.joursRetard) : 0)
+      || (b.date_candidature || '').localeCompare(a.date_candidature || '')
+      || b.id - a.id)
+    .slice(0, 6);
   $('#dashboardTable').innerHTML = recent.length
     ? candidaturesTableHTML(recent, true)
     : emptyState('📋', 'Aucune candidature', 'Clique sur « Nouvelle candidature » pour commencer.');
@@ -682,70 +697,139 @@ async function renderStats() {
 /* ===================================================================== */
 /*  Vue : Candidatures                                                  */
 /* ===================================================================== */
-// Construit les pastilles de filtre par statut, avec le nombre par statut.
-function renderStatutChips() {
-  const box = $('#statutChips');
+// Construit les boutons-menus de filtre (statut, domaine, étiquette).
+function renderFilterControls() {
+  const box = $('#filterControls');
   if (!box) return;
-  // Compte des candidatures par statut.
-  const counts = {};
-  for (const c of State.candidatures) counts[c.statut] = (counts[c.statut] || 0) + 1;
 
-  const chip = (value, label, cssClass, count) => {
-    const active = State.filterStatut === value;
-    const dot = value ? `<span class="chip-dot"></span>` : '';
+  // Comptes FACETTÉS : pour chaque filtre, on compte sur les candidatures qui
+  // satisfont TOUS LES AUTRES filtres actifs (+ la recherche). Les chiffres
+  // restent donc justes en multi-filtre.
+  const statutBase = State.candidatures.filter((c) => candidatureMatchesFilters(c, 'statut'));
+  const domaineBase = State.candidatures.filter((c) => candidatureMatchesFilters(c, 'domaine'));
+  const tagBase = State.candidatures.filter((c) => candidatureMatchesFilters(c, 'tag'));
+
+  const statutCounts = {};
+  for (const c of statutBase) statutCounts[c.statut] = (statutCounts[c.statut] || 0) + 1;
+  const domCounts = {};
+  for (const c of domaineBase) if (c.domaine) domCounts[c.domaine] = (domCounts[c.domaine] || 0) + 1;
+  const tagCounts = {};
+  for (const c of tagBase) for (const t of (c.tags || [])) tagCounts[t] = (tagCounts[t] || 0) + 1;
+
+  // Domaines à proposer : présents dans la base (ou celui déjà sélectionné).
+  const domaines = [...new Set(domaineBase.map((c) => c.domaine).filter(Boolean))];
+  if (State.filterDomaine && !domaines.includes(State.filterDomaine)) domaines.push(State.filterDomaine);
+  domaines.sort((a, b) => a.localeCompare(b, 'fr'));
+  // Étiquettes à proposer : prédéfinies présentes dans la base (ou sélectionnée).
+  const tags = getPredefinedTags().filter((t) => tagCounts[t] || t === State.filterTag);
+
+  const drop = (key, name, current, options) => {
+    const active = current !== '';
+    const menu = options
+      .map((o) =>
+        `<button class="fdrop-opt ${o.value === current ? 'selected' : ''}" data-filter="${key}" data-value="${esc(o.value)}">` +
+        `<span>${esc(o.label)}</span><span class="fdrop-count">${o.count}</span></button>`
+      )
+      .join('');
     return `
-      <button class="chip ${cssClass} ${active ? 'active' : ''}" data-statut-chip="${esc(value)}">
-        ${dot}${esc(label)}
-        <span class="chip-count">${count}</span>
-      </button>`;
+      <div class="fdrop" data-fdrop="${key}">
+        <button type="button" class="fdrop-btn ${active ? 'active' : ''}">
+          ${active ? '<span class="fdrop-on"></span>' : ''}${esc(name)}<span class="fdrop-caret">▾</span>
+        </button>
+        <div class="fdrop-menu">${menu}</div>
+      </div>`;
   };
 
-  let html = chip('', 'Toutes', 'c-all', State.candidatures.length);
-  html += State.statuts
-    .map((s) => chip(s, s, STATUT_CHIP_CLASS[s] || '', counts[s] || 0))
-    .join('');
+  let html = drop('statut', 'Statut', State.filterStatut, [
+    { value: '', label: 'Tous', count: statutBase.length },
+    ...State.statuts.map((s) => ({ value: s, label: s, count: statutCounts[s] || 0 })),
+  ]);
+  if (domaines.length) {
+    html += drop('domaine', 'Domaine', State.filterDomaine, [
+      { value: '', label: 'Tous', count: domaineBase.length },
+      ...domaines.map((d) => ({ value: d, label: d, count: domCounts[d] || 0 })),
+    ]);
+  }
+  if (tags.length) {
+    html += drop('tag', 'Étiquette', State.filterTag, [
+      { value: '', label: 'Toutes', count: tagBase.length },
+      ...tags.map((t) => ({ value: t, label: t, count: tagCounts[t] || 0 })),
+    ]);
+  }
   box.innerHTML = html;
 }
 
-// Rend les pastilles de filtre par étiquette.
-function renderTagChips() {
-  const box = $('#tagChips');
-  const group = $('#tagFilterGroup');
-  const tags = getPredefinedTags();
-  if (group) group.classList.toggle('hidden', tags.length === 0);
+// Rend la rangée des filtres actifs (pastilles supprimables) — masquée si aucun.
+function renderActiveFilters() {
+  const box = $('#activeFilters');
   if (!box) return;
-  let html = `<button class="tagfilter tagfilter-all ${State.filterTag === '' ? 'active' : ''}" data-tag-chip="">Toutes</button>`;
-  html += tags
-    .map((t) => {
-      const active = State.filterTag === t;
-      return `<button class="tagfilter ${active ? 'active' : ''}" data-tag-chip="${esc(t)}" style="--th:${tagHueByName(t)}">${esc(t)}</button>`;
-    })
-    .join('');
-  box.innerHTML = html;
+  const pills = [];
+  if (State.filterStatut) pills.push(['statut', 'Statut', State.filterStatut]);
+  if (State.filterDomaine) pills.push(['domaine', 'Domaine', State.filterDomaine]);
+  if (State.filterTag) pills.push(['tag', 'Étiquette', State.filterTag]);
+  if (!pills.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML =
+    `<span class="active-filters-label">Filtres :</span>` +
+    pills
+      .map(([k, n, v]) =>
+        `<button class="active-pill" data-clear-filter="${k}" title="Retirer ce filtre">${esc(n)} : ${esc(v)} <span class="active-pill-x">⨯</span></button>`
+      )
+      .join('') +
+    `<button class="active-clear" data-clear-filter="all">Tout effacer</button>`;
 }
 
-function getFilteredCandidatures() {
-  const q = ($('#searchCandidatures')?.value || '').toLowerCase().trim();
-  const statut = State.filterStatut;
-  const tag = State.filterTag;
-  return State.candidatures.filter((c) => {
-    if (statut && c.statut !== statut) return false;
-    if (tag && !(Array.isArray(c.tags) && c.tags.includes(tag))) return false;
+// Une candidature passe-t-elle les filtres ? `skip` ignore un filtre donné
+// ('statut' | 'domaine' | 'tag' | 'q') — utilisé pour les comptes facettés.
+function candidatureMatchesFilters(c, skip) {
+  if (skip !== 'q') {
+    const q = ($('#searchCandidatures')?.value || '').toLowerCase().trim();
     if (q) {
       const hay = `${c.entreprise} ${c.poste} ${c.lieu || ''} ${c.recruteur_nom || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
-    return true;
-  });
+  }
+  if (skip !== 'statut' && State.filterStatut && c.statut !== State.filterStatut) return false;
+  if (skip !== 'domaine' && State.filterDomaine && c.domaine !== State.filterDomaine) return false;
+  if (skip !== 'tag' && State.filterTag && !(Array.isArray(c.tags) && c.tags.includes(State.filterTag))) return false;
+  return true;
+}
+
+function getFilteredCandidatures() {
+  const list = State.candidatures.filter((c) => candidatureMatchesFilters(c, null));
+  return sortCandidatures(list, State.sortBy);
+}
+
+// Trie une liste de candidatures selon le critère choisi.
+function sortCandidatures(list, by) {
+  const arr = [...list];
+  const dateDesc = (a, b) => (b.date_candidature || '').localeCompare(a.date_candidature || '') || b.id - a.id;
+  if (by === 'activite') {
+    // Dernière activité = champ updated_at le plus récent (relance, changement de statut…).
+    arr.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '') || dateDesc(a, b));
+  } else if (by === 'relance') {
+    // À relancer d'abord (les plus en retard en haut), puis le reste par date.
+    const overdue = (c) => (c.relance && c.relance.aRelancer ? 1 : 0);
+    arr.sort((a, b) => overdue(b) - overdue(a)
+      || (overdue(a) ? (b.relance.joursRetard - a.relance.joursRetard) : 0)
+      || dateDesc(a, b));
+  } else {
+    arr.sort(dateDesc); // 'date' (défaut)
+  }
+  return arr;
 }
 
 function renderCandidatures() {
-  renderStatutChips();
-  renderTagChips();
+  renderFilterControls();
+  renderActiveFilters();
 
   // Bouton "effacer" de la recherche.
   const q = $('#searchCandidatures')?.value || '';
   $('#searchClear')?.classList.toggle('hidden', q.length === 0);
+
+  // Synchronise le sélecteur de tri avec l'état.
+  const sortSel = $('#sortCandidatures');
+  if (sortSel && sortSel.value !== State.sortBy) sortSel.value = State.sortBy;
 
   const list = getFilteredCandidatures();
 
@@ -2532,9 +2616,12 @@ async function afterChange() {
 /*  Délégation d'événements (clics)                                    */
 /* ===================================================================== */
 document.addEventListener('click', async (e) => {
-  // Ferme les menus déroulants personnalisés ouverts si on clique en dehors.
+  // Ferme les menus déroulants ouverts si on clique en dehors.
   if (!e.target.closest('.cselect')) {
     document.querySelectorAll('.cselect.open').forEach((x) => x.classList.remove('open'));
+  }
+  if (!e.target.closest('.fdrop')) {
+    document.querySelectorAll('.fdrop.open').forEach((x) => x.classList.remove('open'));
   }
 
   // Bouton "effacer" de la recherche
@@ -2546,18 +2633,34 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // Pastille de filtre par statut
-  const chipBtn = e.target.closest('[data-statut-chip]');
-  if (chipBtn) {
-    State.filterStatut = chipBtn.dataset.statutChip;
+  // Ouverture/fermeture d'un bouton-menu de filtre
+  const fbtn = e.target.closest('.fdrop-btn');
+  if (fbtn) {
+    const drop = fbtn.closest('.fdrop');
+    const wasOpen = drop.classList.contains('open');
+    document.querySelectorAll('.fdrop.open').forEach((x) => x.classList.remove('open'));
+    if (!wasOpen) drop.classList.add('open');
+    return;
+  }
+  // Choix d'une option de filtre
+  const fopt = e.target.closest('.fdrop-opt');
+  if (fopt) {
+    const k = fopt.dataset.filter, v = fopt.dataset.value;
+    if (k === 'statut') State.filterStatut = v;
+    else if (k === 'domaine') State.filterDomaine = v;
+    else if (k === 'tag') State.filterTag = v;
+    fopt.closest('.fdrop')?.classList.remove('open');
     renderCandidatures();
     return;
   }
-
-  // Pastille de filtre par étiquette
-  const tagBtn = e.target.closest('[data-tag-chip]');
-  if (tagBtn) {
-    State.filterTag = tagBtn.dataset.tagChip;
+  // Retrait d'un filtre actif (pastille) ou "Tout effacer"
+  const clr = e.target.closest('[data-clear-filter]');
+  if (clr) {
+    const w = clr.dataset.clearFilter;
+    if (w === 'all') { State.filterStatut = ''; State.filterDomaine = ''; State.filterTag = ''; }
+    else if (w === 'statut') State.filterStatut = '';
+    else if (w === 'domaine') State.filterDomaine = '';
+    else if (w === 'tag') State.filterTag = '';
     renderCandidatures();
     return;
   }
@@ -2733,6 +2836,13 @@ document.addEventListener('click', async (e) => {
 // Recherche & filtres
 document.addEventListener('input', (e) => {
   if (e.target.id === 'searchCandidatures') renderCandidatures();
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'sortCandidatures') {
+    State.sortBy = e.target.value;
+    renderCandidatures();
+  }
 });
 
 /* ===================================================================== */

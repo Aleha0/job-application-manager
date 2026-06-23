@@ -88,7 +88,7 @@
 
         <div class="card">
           <div class="card-head">
-            <h2>Candidatures récentes</h2>
+            <h2>À traiter en priorité</h2>
             <button class="btn btn-ghost" data-view="candidatures">Tout voir →</button>
           </div>
           <div id="dashboardTable"></div>
@@ -131,15 +131,17 @@
             />
             <button class="filter-search-clear hidden" id="searchClear" title="Effacer">✕</button>
           </div>
-          <div class="filter-group">
-            <span class="filter-group-label">Statut</span>
-            <div class="filter-chips" id="statutChips"></div>
-          </div>
-          <div class="filter-group hidden" id="tagFilterGroup">
-            <span class="filter-group-label">Étiquette</span>
-            <div class="filter-chips" id="tagChips"></div>
-          </div>
+          <div class="filter-controls" id="filterControls"></div>
+          <label class="sort-control">Trier&nbsp;par
+            <select id="sortCandidatures" class="input">
+              <option value="date">Date de candidature</option>
+              <option value="activite">Dernière activité</option>
+              <option value="relance">À relancer d'abord</option>
+            </select>
+          </label>
         </div>
+
+        <div class="active-filters hidden" id="activeFilters"></div>
 
         <div class="card">
           <div class="card-head card-head-sub">
