@@ -125,6 +125,21 @@ function isValidISODate(s) {
   return !isNaN(d) && d.toISOString().slice(0, 10) === s;
 }
 
+// Renvoie l'URL seulement si elle est http(s) et bien formée, sinon null.
+// Bloque les schémas dangereux (javascript:, data:, file:…) AVANT stockage,
+// pour qu'aucun lien piégé ne puisse être enregistré puis cliqué (anti-XSS).
+function safeHttpUrl(v) {
+  if (v == null || typeof v === 'object') return null;
+  const s = String(v).trim();
+  if (!s || s.length > 2000) return null;
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? s : null;
+  } catch {
+    return null;
+  }
+}
+
 // Ajoute `days` jours à une date ISO (YYYY-MM-DD) sans dérive de fuseau :
 // tout le calcul se fait en UTC, donc le résultat = base + days exactement.
 function addDaysISO(iso, days) {
@@ -255,7 +270,7 @@ app.post(
       date_relance: b.date_relance || null,
       recruteur_nom: b.recruteur_nom || null,
       recruteur_email: b.recruteur_email || null,
-      lien_offre: b.lien_offre || null,
+      lien_offre: safeHttpUrl(b.lien_offre),
       salaire: b.salaire || null,
       type_contrat: b.type_contrat || null,
       plateforme: b.plateforme || null,
@@ -309,7 +324,7 @@ app.put(
       date_relance: b.date_relance !== undefined ? b.date_relance || null : existing.date_relance,
       recruteur_nom: b.recruteur_nom ?? existing.recruteur_nom,
       recruteur_email: b.recruteur_email ?? existing.recruteur_email,
-      lien_offre: b.lien_offre ?? existing.lien_offre,
+      lien_offre: b.lien_offre !== undefined ? safeHttpUrl(b.lien_offre) : existing.lien_offre,
       salaire: b.salaire ?? existing.salaire,
       type_contrat: b.type_contrat ?? existing.type_contrat,
       plateforme: b.plateforme !== undefined ? (b.plateforme || null) : existing.plateforme,
@@ -417,6 +432,295 @@ app.delete(
     db.prepare('DELETE FROM relances WHERE id = ? AND candidature_id = ?').run(rid, id);
     const delai = parseInt(getSetting('relance_delai_jours', '7'), 10);
     res.json(enrichCandidature(cand, delai));
+  })
+);
+
+// =========================================================================
+//  API : IMPORT de candidatures (JSON)
+// =========================================================================
+
+// Mappe un statut du fichier importé vers un statut de l'app (tolérant aux
+// accents/casse). Repli sur « À postuler » si inconnu.
+const STATUT_IMPORT_MAP = {
+  refus: 'Refusée', refuse: 'Refusée', refusee: 'Refusée',
+  'candidature envoyee': 'Envoyée', envoyee: 'Envoyée',
+  'sans reponse': 'Sans réponse',
+  'a postuler': 'À postuler',
+  relancee: 'Relancée',
+  entretien: 'Entretien',
+  acceptee: 'Acceptée',
+  'en reserve': 'En réserve',
+};
+function mapImportStatut(s) {
+  if (STATUTS.includes(s)) return s;
+  return STATUT_IMPORT_MAP[normalizeStr(s).trim()] || 'À postuler';
+}
+
+// Convertit une date d'import (JJ/MM/AAAA ou ISO) en ISO, ou null.
+function parseImportDate(s) {
+  if (s == null) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+  let m;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(str))) {
+    const iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return isValidISODate(iso) ? iso : null;
+  }
+  if ((m = /^(\d{4}-\d{2}-\d{2})/.exec(str))) return isValidISODate(m[1]) ? m[1] : null;
+  return null;
+}
+
+// Bornes défensives pour l'import (entrée potentiellement malveillante).
+const IMPORT_STR_MAX = 2000;     // longueur max d'un champ texte
+const IMPORT_NOTE_TITRE_MAX = 200;
+const IMPORT_NOTE_CONTENU_MAX = 10000;
+const IMPORT_MAX_TAGS = 50;      // par candidature
+const IMPORT_TAG_MAX = 100;
+const IMPORT_MAX_NOTES = 200;    // par candidature
+const IMPORT_MAX_RELANCES = 200; // par candidature
+
+// Convertit une valeur en texte borné, ou null. Rejette objets/tableaux
+// (un champ texte ne doit pas être un objet -> évite "[object Object]").
+function importEmptyToNull(v) {
+  if (v == null || typeof v === 'object') return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  return s.length > IMPORT_STR_MAX ? s.slice(0, IMPORT_STR_MAX) : s;
+}
+
+// 1re valeur non vide parmi plusieurs noms de champ (camelCase ou snake_case).
+function importPick(raw, ...keys) {
+  for (const k of keys) {
+    if (raw[k] !== undefined && raw[k] !== null && raw[k] !== '') return raw[k];
+  }
+  return null;
+}
+
+// Normalise une ligne brute du fichier vers la structure interne.
+function normalizeImportRow(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'Entrée invalide' };
+  const entreprise = importEmptyToNull(importPick(raw, 'entreprise'));
+  const poste = importEmptyToNull(importPick(raw, 'poste'));
+  if (!entreprise || !poste) return { error: 'Entreprise et poste requis (texte non vide)' };
+
+  const tagsSrc = importPick(raw, 'etiquettes', 'tags');
+  const tags = Array.isArray(tagsSrc)
+    ? [...new Set(
+        tagsSrc
+          .filter((t) => t != null && typeof t !== 'object')
+          .map((t) => String(t).trim().slice(0, IMPORT_TAG_MAX))
+          .filter(Boolean)
+      )].slice(0, IMPORT_MAX_TAGS)
+    : [];
+
+  const notesSrc = importPick(raw, 'notes');
+  const notes = Array.isArray(notesSrc)
+    ? notesSrc
+        .slice(0, IMPORT_MAX_NOTES)
+        .map((n) => {
+          if (n && typeof n === 'object' && !Array.isArray(n)) {
+            return {
+              titre: String(n.label || n.titre || '').trim().slice(0, IMPORT_NOTE_TITRE_MAX) || 'Note',
+              contenu: String(n.value || n.contenu || '').trim().slice(0, IMPORT_NOTE_CONTENU_MAX),
+            };
+          }
+          if (typeof n === 'string' || typeof n === 'number') {
+            return { titre: 'Note', contenu: String(n).trim().slice(0, IMPORT_NOTE_CONTENU_MAX) };
+          }
+          return null;
+        })
+        .filter((n) => n && n.contenu)
+    : [];
+
+  const cvConserveRaw = importPick(raw, 'cvConserve', 'cv_conserve');
+  const cv_conserve = cvConserveRaw === true || cvConserveRaw === 1 || cvConserveRaw === '1' ? 1 : 0;
+  const moisRaw = importPick(raw, 'cvConserveMois', 'cv_conserve_mois');
+  const cv_conserve_mois =
+    moisRaw != null && moisRaw !== '' && isFinite(Number(moisRaw)) ? Math.max(0, Math.round(Number(moisRaw))) : null;
+
+  // Relances : soit un tableau `relances` (format app), soit une date unique
+  // `dateRelance` (format suivi) = une relance déjà effectuée.
+  let relances = [];
+  const relSrc = importPick(raw, 'relances');
+  if (Array.isArray(relSrc)) {
+    relances = relSrc
+      .slice(0, IMPORT_MAX_RELANCES)
+      .map((r) => ({
+        date: parseImportDate(r && r.date),
+        canal: r && RELANCE_CANAUX.includes(r.canal) ? r.canal : null,
+        note: r && r.note && typeof r.note !== 'object' ? String(r.note).trim().slice(0, 2000) : null,
+      }))
+      .filter((r) => r.date);
+  } else {
+    const d = parseImportDate(importPick(raw, 'dateRelance', 'date_relance'));
+    if (d) relances = [{ date: d, canal: null, note: null }];
+  }
+
+  return {
+    fields: {
+      entreprise,
+      poste,
+      lieu: importEmptyToNull(importPick(raw, 'lieu')),
+      statut: mapImportStatut(importPick(raw, 'statut')),
+      date_candidature: parseImportDate(importPick(raw, 'dateCandidature', 'date_candidature')),
+      date_reponse: parseImportDate(importPick(raw, 'dateReponse', 'date_reponse')),
+      recruteur_nom: importEmptyToNull(importPick(raw, 'nomRecruteur', 'recruteur_nom')),
+      recruteur_email: importEmptyToNull(importPick(raw, 'emailRecruteur', 'recruteur_email')),
+      lien_offre: safeHttpUrl(importPick(raw, 'lienOffre', 'lien_offre')),
+      salaire: importEmptyToNull(importPick(raw, 'salaire')),
+      type_contrat: importEmptyToNull(importPick(raw, 'typeContrat', 'type_contrat')),
+      plateforme: importEmptyToNull(importPick(raw, 'plateforme')),
+      domaine: importEmptyToNull(importPick(raw, 'domaineMetier', 'domaine')),
+      cv_conserve,
+      cv_conserve_mois,
+    },
+    tags,
+    notes,
+    relances,
+  };
+}
+
+// Étiquettes inconnues (non présentes dans la liste settings) parmi `tagNames`.
+function unknownTagsAmong(tagNames) {
+  let arr = [];
+  try { arr = JSON.parse(getSetting('tags', '[]')); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  const nameOf = (t) => (typeof t === 'string' ? t : (t && t.name) || '');
+  const existing = new Set(arr.map((t) => normalizeStr(nameOf(t))));
+  const seen = new Set();
+  const out = [];
+  for (const name of tagNames) {
+    const n = normalizeStr(name);
+    if (!n || existing.has(n) || seen.has(n)) continue;
+    seen.add(n);
+    out.push(name);
+  }
+  return out;
+}
+
+// Ajoute réellement les étiquettes inconnues à la liste settings. Renvoie celles ajoutées.
+function addUnknownTags(tagNames) {
+  const toAdd = unknownTagsAmong(tagNames);
+  if (!toAdd.length) return [];
+  let arr = [];
+  try { arr = JSON.parse(getSetting('tags', '[]')); } catch { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  for (const name of toAdd) {
+    const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+    arr.push({ name, hue });
+  }
+  db.prepare("INSERT INTO settings (key, value) VALUES ('tags', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+    .run(JSON.stringify(arr));
+  return toAdd;
+}
+
+// Champs scalaires complétables sur une candidature existante (jamais le statut :
+// on ne modifie pas l'état d'une candidature déjà saisie).
+const IMPORT_COMPLETABLE = [
+  'lieu', 'date_candidature', 'date_reponse', 'recruteur_nom', 'recruteur_email',
+  'lien_offre', 'salaire', 'type_contrat', 'plateforme', 'domaine',
+];
+
+// Traite l'import : dry-run (commit=false) ou exécution (commit=true).
+function processImport(rows, commit) {
+  const keyOf = (ent, pos) => normalizeStr(ent) + '||' + normalizeStr(pos);
+  const byKey = new Map();
+  for (const c of db.prepare('SELECT * FROM candidatures').all()) byKey.set(keyOf(c.entreprise, c.poste), c);
+
+  const out = { total: rows.length, toCreate: 0, toComplete: 0, identical: 0, errors: [], details: [] };
+  const allTags = new Set();
+
+  const insCand = db.prepare(`
+    INSERT INTO candidatures
+      (entreprise, poste, lieu, statut, date_candidature, date_relance, recruteur_nom,
+       recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse,
+       cv_document_id, domaine, tags, cv_conserve, cv_conserve_mois)
+    VALUES
+      (@entreprise, @poste, @lieu, @statut, @date_candidature, NULL, @recruteur_nom,
+       @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse,
+       NULL, @domaine, @tags, @cv_conserve, @cv_conserve_mois)`);
+  const insNote = db.prepare('INSERT INTO notes (candidature_id, titre, contenu) VALUES (?, ?, ?)');
+  const insRel = db.prepare('INSERT INTO relances (candidature_id, date, canal, note) VALUES (?, ?, ?, ?)');
+
+  const run = () => {
+    rows.forEach((raw, i) => {
+      const norm = normalizeImportRow(raw);
+      if (norm.error) {
+        out.errors.push({ index: i, error: norm.error, entreprise: (raw && raw.entreprise) || '' });
+        return;
+      }
+      const f = norm.fields;
+      norm.tags.forEach((t) => allTags.add(t));
+      const key = keyOf(f.entreprise, f.poste);
+      const exist = byKey.get(key);
+
+      if (!exist) {
+        out.toCreate++;
+        out.details.push({ action: 'create', entreprise: f.entreprise, poste: f.poste });
+        if (commit) {
+          const row = { ...f, date_candidature: f.date_candidature || todayISO(), tags: JSON.stringify(norm.tags) };
+          const info = insCand.run(row);
+          const id = info.lastInsertRowid;
+          for (const n of norm.notes) insNote.run(id, n.titre, n.contenu);
+          for (const r of norm.relances) insRel.run(id, r.date, r.canal, r.note);
+          byKey.set(key, { id, ...row }); // doublons internes au fichier -> complétés
+        }
+      } else {
+        const updates = {};
+        for (const k of IMPORT_COMPLETABLE) {
+          if ((exist[k] == null || exist[k] === '') && f[k] != null && f[k] !== '') updates[k] = f[k];
+        }
+        if (!exist.cv_conserve && f.cv_conserve) {
+          updates.cv_conserve = 1;
+          if (f.cv_conserve_mois != null) updates.cv_conserve_mois = f.cv_conserve_mois;
+        } else if (exist.cv_conserve && exist.cv_conserve_mois == null && f.cv_conserve_mois != null) {
+          updates.cv_conserve_mois = f.cv_conserve_mois;
+        }
+        const curTags = parseTags(exist.tags);
+        const mergedTags = [...new Set([...curTags, ...norm.tags])];
+        const tagsChanged = mergedTags.length !== curTags.length;
+
+        if (Object.keys(updates).length === 0 && !tagsChanged) {
+          out.identical++;
+          out.details.push({ action: 'identical', entreprise: f.entreprise, poste: f.poste });
+        } else {
+          out.toComplete++;
+          const champs = Object.keys(updates);
+          if (tagsChanged) champs.push('tags');
+          out.details.push({ action: 'complete', entreprise: f.entreprise, poste: f.poste, champs });
+          if (commit) {
+            if (tagsChanged) updates.tags = JSON.stringify(mergedTags);
+            const sets = Object.keys(updates).map((k) => `${k} = @${k}`).join(', ');
+            db.prepare(`UPDATE candidatures SET ${sets}, updated_at = datetime('now') WHERE id = @id`)
+              .run({ ...updates, id: exist.id });
+            byKey.set(key, { ...exist, ...updates });
+          }
+        }
+      }
+    });
+  };
+
+  if (commit) db.transaction(run)();
+  else run();
+
+  out.tagsToAdd = unknownTagsAmong(allTags);
+  if (commit) out.tagsAdded = addUnknownTags(allTags);
+  return out;
+}
+
+app.post(
+  '/api/candidatures/import',
+  asyncRoute((req, res) => {
+    const b = req.body || {};
+    let rows = b.data;
+    if (rows && !Array.isArray(rows) && Array.isArray(rows.candidatures)) rows = rows.candidatures;
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({ error: 'Format attendu : un tableau JSON de candidatures (ou un objet { candidatures: [...] }).' });
+    }
+    if (rows.length === 0) return res.status(400).json({ error: 'Aucune candidature dans le fichier.' });
+    if (rows.length > 500) return res.status(400).json({ error: "Trop d'entrées (500 max par import)." });
+    const commit = b.confirm === true;
+    res.json({ committed: commit, ...processImport(rows, commit) });
   })
 );
 
@@ -1034,7 +1338,7 @@ app.post(
     if (!b.nom) return res.status(400).json({ error: 'Le nom est requis.' });
     const info = db
       .prepare('INSERT INTO cvtheques (nom, url, derniere_maj, notes) VALUES (?, ?, ?, ?)')
-      .run(b.nom, b.url || null, b.derniere_maj || null, b.notes || null);
+      .run(b.nom, safeHttpUrl(b.url), b.derniere_maj || null, b.notes || null);
     setCvthequeCvs(info.lastInsertRowid, b.cv_document_ids);
     res.status(201).json(db.prepare('SELECT * FROM cvtheques WHERE id = ?').get(info.lastInsertRowid));
   })
@@ -1053,7 +1357,7 @@ app.put(
       WHERE id = ?
     `).run(
       b.nom ?? existing.nom,
-      b.url !== undefined ? (b.url || null) : existing.url,
+      b.url !== undefined ? safeHttpUrl(b.url) : existing.url,
       b.derniere_maj !== undefined ? (b.derniere_maj || null) : existing.derniere_maj,
       b.notes !== undefined ? (b.notes || null) : existing.notes,
       id
@@ -1753,8 +2057,20 @@ app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ error: `Erreur d'upload : ${err.message}` });
   }
+  // Erreurs de parsing du corps (JSON malformé, corps trop volumineux) : 4xx client.
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'JSON invalide.' });
+  }
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'Fichier trop volumineux (2 Mo max).' });
+  }
+  const status = err && (err.status || err.statusCode);
+  if (status && status >= 400 && status < 500) {
+    return res.status(status).json({ error: err.message || 'Requête invalide.' });
+  }
+  // Erreur serveur : on logge côté serveur, on ne renvoie aucun détail interne.
   console.error(err);
-  res.status(500).json({ error: err.message || 'Erreur serveur' });
+  res.status(500).json({ error: 'Erreur serveur' });
 });
 
 // --- Démarrage ------------------------------------------------------------

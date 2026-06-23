@@ -154,6 +154,17 @@ Under the hood, your data lives in two folders:
 You can also back up by simply copying these two folders by hand. Either way, both
 are ignored by Git (`.gitignore`), so your data always stays private.
 
+## 📥 Import & export
+
+You can **import** applications from a JSON file (with duplicate detection and a safe
+preview), and **export** them to Excel, PDF, CSV or JSON. The full data model and file
+structures are documented here:
+
+➡️ **[Import & export — data formats](docs/IMPORT-EXPORT.md)**
+
+The same documentation is available inside the app, under **📖 Documentation** in the
+sidebar.
+
 ## 🔒 Privacy & security
 
 - The server binds to `127.0.0.1` only — never exposed on your network (override with

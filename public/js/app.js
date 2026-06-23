@@ -85,6 +85,18 @@ function esc(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// N'autorise que les URL http(s) comme lien cliquable (bloque javascript:, data:…).
+// Défense en profondeur côté affichage, en plus de la validation serveur.
+function safeUrl(s) {
+  if (!s) return null;
+  try {
+    const u = new URL(String(s));
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date((iso.length === 10 ? iso + 'T00:00:00' : iso));
@@ -764,8 +776,9 @@ function candidaturesTableHTML(list, compact) {
             ? `<span class="cell-sub">${fmtDate(c.relance.dueDate)}</span>`
             : '—');
       const contrat = c.type_contrat ? `<span class="tag">${esc(c.type_contrat)}</span>` : '';
-      const lien = c.lien_offre
-        ? `<a class="link-ext" href="${esc(c.lien_offre)}" target="_blank" rel="noopener">offre ↗</a>`
+      const safeLien = safeUrl(c.lien_offre);
+      const lien = safeLien
+        ? `<a class="link-ext" href="${esc(safeLien)}" target="_blank" rel="noopener">offre ↗</a>`
         : '';
       const tags = (!compact && Array.isArray(c.tags) && c.tags.length)
         ? `<div class="tag-row">${c.tags.map((t) => tagChip(t)).join('')}</div>`
@@ -1795,8 +1808,9 @@ function cvthequeCardHTML(cv) {
   const cvLink = cvNames.length
     ? `<div class="doc-meta">📄 CV : ${esc(cvNames.join(', '))}</div>`
     : '<div class="doc-meta" style="color:var(--muted)">Aucun CV lié</div>';
-  const open = cv.url
-    ? `<a class="btn btn-sm btn-secondary" href="${esc(cv.url)}" target="_blank" rel="noopener">↗ Ouvrir</a>`
+  const safeCvUrl = safeUrl(cv.url);
+  const open = safeCvUrl
+    ? `<a class="btn btn-sm btn-secondary" href="${esc(safeCvUrl)}" target="_blank" rel="noopener">↗ Ouvrir</a>`
     : '';
   const notes = cv.notes ? `<div class="doc-meta">📝 ${esc(cv.notes)}</div>` : '';
   return `
@@ -2384,6 +2398,128 @@ function setupStaticControls() {
 /* ===================================================================== */
 /*  Rafraîchissement global après modification                          */
 /* ===================================================================== */
+/* ===================================================================== */
+/*  Modale : Import de candidatures (JSON)                              */
+/* ===================================================================== */
+function importModal() {
+  openModal(`
+    <div class="modal-head">
+      <h2>Importer des candidatures (JSON)</h2>
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted">Importe un fichier <strong>.json</strong> (un tableau de candidatures).
+        Les doublons (même <strong>entreprise + poste</strong>) sont détectés : les candidatures
+        existantes sont <strong>complétées</strong> sans jamais écraser ce que tu as déjà saisi.</p>
+      <div class="field">
+        <label>Fichier JSON</label>
+        <input class="input" type="file" id="importFile" accept=".json,application/json" />
+      </div>
+      <div class="field">
+        <label>… ou colle le JSON ici</label>
+        <textarea class="input" id="importPaste" rows="6" placeholder='[ { "entreprise": "…", "poste": "…" } ]'></textarea>
+      </div>
+      <div id="importPreview"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-primary" id="btnImportAnalyze">Analyser</button>
+      <button class="btn btn-primary hidden" id="btnImportConfirm">Confirmer l'import</button>
+    </div>
+  `, { large: true });
+
+  let parsedRows = null;
+
+  $('#importFile')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      $('#importPaste').value = await file.text();
+      resetImportPreview();
+    } catch {
+      toast('Lecture du fichier impossible', 'err');
+    }
+  });
+
+  // Re-analyser si on modifie le texte après un premier aperçu.
+  $('#importPaste')?.addEventListener('input', resetImportPreview);
+
+  function resetImportPreview() {
+    parsedRows = null;
+    $('#importPreview').innerHTML = '';
+    $('#btnImportAnalyze').classList.remove('hidden');
+    $('#btnImportConfirm').classList.add('hidden');
+  }
+
+  $('#btnImportAnalyze').addEventListener('click', async () => {
+    const raw = ($('#importPaste').value || '').trim();
+    if (!raw) { toast('Choisis un fichier ou colle du JSON', 'err'); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch (err) { toast('JSON invalide : ' + err.message, 'err'); return; }
+    try {
+      const r = await api('/api/candidatures/import', { method: 'POST', body: { data } });
+      parsedRows = data;
+      renderImportPreview(r);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  });
+
+  $('#btnImportConfirm').addEventListener('click', async () => {
+    if (!parsedRows) return;
+    const btn = $('#btnImportConfirm');
+    btn.disabled = true;
+    try {
+      const r = await api('/api/candidatures/import', { method: 'POST', body: { data: parsedRows, confirm: true } });
+      closeModal();
+      toast(`Import terminé : ${r.toCreate} créée(s), ${r.toComplete} complétée(s), ${r.identical} inchangée(s)`);
+      try { State.settings = await api('/api/settings'); } catch {}
+      await afterChange();
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message, 'err');
+    }
+  });
+}
+
+function renderImportPreview(r) {
+  const box = $('#importPreview');
+  const errCount = r.errors.length;
+  const completes = r.details.filter((d) => d.action === 'complete');
+  box.innerHTML = `
+    <div class="import-summary">
+      <div class="import-stat"><strong>${r.toCreate}</strong><span>à créer</span></div>
+      <div class="import-stat"><strong>${r.toComplete}</strong><span>à compléter</span></div>
+      <div class="import-stat"><strong>${r.identical}</strong><span>inchangées</span></div>
+      ${errCount ? `<div class="import-stat err"><strong>${errCount}</strong><span>erreur(s)</span></div>` : ''}
+    </div>
+    ${r.tagsToAdd && r.tagsToAdd.length
+      ? `<p class="muted">Nouvelles étiquettes qui seront ajoutées : ${r.tagsToAdd.map(esc).join(', ')}</p>`
+      : ''}
+    ${errCount
+      ? `<details class="import-details"><summary>${errCount} entrée(s) ignorée(s)</summary><ul>${r.errors
+          .map((e) => `<li>#${e.index + 1} ${esc(e.entreprise || '')} — ${esc(e.error)}</li>`)
+          .join('')}</ul></details>`
+      : ''}
+    ${completes.length
+      ? `<details class="import-details"><summary>${completes.length} candidature(s) à compléter</summary><ul>${completes
+          .map((d) => `<li>${esc(d.entreprise)} — ${esc(d.poste)} <span class="cell-sub">(${(d.champs || []).join(', ')})</span></li>`)
+          .join('')}</ul></details>`
+      : ''}`;
+
+  $('#btnImportAnalyze').classList.add('hidden');
+  const conf = $('#btnImportConfirm');
+  const nb = r.toCreate + r.toComplete;
+  if (nb === 0) {
+    conf.classList.add('hidden');
+    box.innerHTML += `<p class="muted">Rien à importer : tout est déjà à jour. 👍</p>`;
+  } else {
+    conf.classList.remove('hidden');
+    conf.disabled = false;
+    conf.textContent = `Confirmer (${nb} modification${nb > 1 ? 's' : ''})`;
+  }
+}
+
 async function afterChange() {
   await Promise.all([refreshCandidatures(), refreshFolders()]);
   await renderFlash();
@@ -2448,6 +2584,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'new-note') noteModal();
     if (a === 'upload-doc') uploadModal();
     if (a === 'new-cvtheque') cvthequeModal();
+    if (a === 'import-candidatures') importModal();
     if (a === 'save-settings') saveSettings();
     return;
   }

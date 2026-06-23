@@ -133,6 +133,17 @@ if (!candCols.some((c) => c.name === 'domaine')) {
   db.exec('ALTER TABLE candidatures ADD COLUMN domaine TEXT');
 }
 
+// Conservation RGPD des données par l'employeur (alimentée par l'import,
+// exploitée par la page « Mes données personnelles »).
+//  - cv_conserve      : 1 si l'employeur conserve le dossier, 0 sinon
+//  - cv_conserve_mois : durée de conservation en mois (NULL si inconnue)
+if (!candCols.some((c) => c.name === 'cv_conserve')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN cv_conserve INTEGER NOT NULL DEFAULT 0');
+}
+if (!candCols.some((c) => c.name === 'cv_conserve_mois')) {
+  db.exec('ALTER TABLE candidatures ADD COLUMN cv_conserve_mois INTEGER');
+}
+
 // Migration unique : ajoute « En physique » et « Par e-mail » aux plateformes
 // existantes (remplace l'ancien « En personne »). Ne s'exécute qu'une fois.
 const migPlatDone = db.prepare("SELECT value FROM settings WHERE key = 'migr_plat_spontane'").get();

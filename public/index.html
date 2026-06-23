@@ -50,6 +50,9 @@
         <button class="nav-item" data-view="cvtheques">
           <span class="nav-ico">🗃️</span> Mes CVthèques
         </button>
+        <button class="nav-item" data-view="docs">
+          <span class="nav-ico">📖</span> Documentation
+        </button>
         <button class="nav-item" data-view="settings">
           <span class="nav-ico">⚙️</span> Paramètres
         </button>
@@ -75,9 +78,10 @@
             <h1>Tableau de bord</h1>
             <p class="muted">Vue d'ensemble de tes candidatures</p>
           </div>
-          <button class="btn btn-primary" data-action="new-candidature">
-            + Nouvelle candidature
-          </button>
+          <div class="header-actions">
+            <button class="btn btn-secondary" data-action="import-candidatures" title="Importer des candidatures depuis un fichier JSON">⬆ Importer (JSON)</button>
+            <button class="btn btn-primary" data-action="new-candidature">+ Nouvelle candidature</button>
+          </div>
         </header>
 
         <div class="stat-grid" id="statGrid"></div>
@@ -112,6 +116,7 @@
           <div class="header-actions">
             <a class="btn btn-secondary" href="/api/export/excel" title="Exporter en Excel">⬇ Excel</a>
             <a class="btn btn-secondary" href="/api/export/pdf" title="Exporter en PDF">⬇ PDF</a>
+            <button class="btn btn-secondary" data-action="import-candidatures" title="Importer des candidatures depuis un fichier JSON">⬆ Importer (JSON)</button>
             <button class="btn btn-primary" data-action="new-candidature">+ Nouvelle candidature</button>
           </div>
         </header>
@@ -179,6 +184,146 @@
           <button class="btn btn-primary" data-action="new-cvtheque">+ Ajouter une plateforme</button>
         </header>
         <div id="cvthequesList"></div>
+      </section>
+
+      <!-- Vue : Documentation -->
+      <section class="view hidden" id="view-docs">
+        <header class="view-header">
+          <div>
+            <h1>📖 Documentation</h1>
+            <p class="muted">Importer et exporter tes candidatures : formats et bonnes pratiques</p>
+          </div>
+        </header>
+
+        <div class="doc-hero">
+          <div class="doc-hero-text">
+            <h2>Importer &amp; exporter tes données</h2>
+            <p>Récupère tes candidatures depuis un fichier <strong>JSON</strong>, et exporte-les
+              en <strong>Excel</strong>, <strong>PDF</strong>, <strong>CSV</strong> ou
+              <strong>JSON</strong>. Tout reste sur ta machine.</p>
+          </div>
+          <div class="doc-hero-pills">
+            <span class="doc-pill">📥 Import JSON</span>
+            <span class="doc-pill">📊 Excel</span>
+            <span class="doc-pill">📄 PDF</span>
+            <span class="doc-pill">🧾 CSV</span>
+            <span class="doc-pill">🗂️ Sauvegarde .zip</span>
+          </div>
+        </div>
+
+        <!-- Import -->
+        <div class="doc-block">
+          <div class="doc-block-title" style="--accent: var(--blue)"><span>📥</span> Importer des candidatures</div>
+
+          <ol class="doc-steps">
+            <li><span>Onglet <strong>Candidatures</strong> ou <strong>Tableau de bord</strong> → <strong>⬆ Importer (JSON)</strong></span></li>
+            <li><span>Choisis un fichier <code>.json</code> ou colle le JSON</span></li>
+            <li><span><strong>Analyser</strong> → aperçu (à créer · à compléter · inchangées · ignorées)</span></li>
+            <li><span><strong>Confirmer</strong> — rien n'est écrit avant cette étape</span></li>
+          </ol>
+
+          <h3 class="doc-h">La structure JSON</h3>
+          <p class="doc-p">C'est <strong>la structure cible</strong> : si tu demandes à un outil ou
+            une IA de générer le fichier, donne-lui cette forme. Le niveau racine est un
+            <strong>tableau JSON</strong> d'objets (ou un objet <code>{ "candidatures": [ … ] }</code>).
+            Chaque objet = une candidature ; seuls <strong>entreprise</strong> et
+            <strong>poste</strong> sont obligatoires, le reste est optionnel.</p>
+
+          <p class="doc-p">Exemple complet avec <strong>tous les champs gérés</strong> :</p>
+          <div class="doc-codewrap">
+            <div class="doc-codebar"><span class="doc-codedot"></span><span class="doc-codedot"></span><span class="doc-codedot"></span><span class="doc-codename">candidatures.json</span></div>
+            <pre class="doc-code">[
+  {
+    "entreprise": "Studio Lumière",
+    "poste": "Chargé de communication",
+    "lieu": "Lyon",
+    "statut": "Envoyée",
+    "date_candidature": "2026-03-12",
+    "date_reponse": "2026-03-20",
+    "recruteur_nom": "Jordan Doe",
+    "recruteur_email": "rh@studio-lumiere.example",
+    "lien_offre": "https://studio-lumiere.example/offres/42",
+    "salaire": "32 000 €",
+    "type_contrat": "CDI",
+    "domaine": "Communication",
+    "plateforme": "Site de l'entreprise",
+    "tags": ["Spontanée", "Priorité haute"],
+    "notes": [
+      { "label": "Accusé réception", "value": "Candidature reçue le 12/03" }
+    ],
+    "relances": [
+      { "date": "2026-03-19", "canal": "mail", "note": "Relancé, en attente de retour" }
+    ],
+    "cv_conserve": true,
+    "cv_conserve_mois": 24
+  }
+]</pre>
+          </div>
+
+          <h3 class="doc-h">Les champs</h3>
+          <div class="doc-fields">
+            <div class="doc-field"><div class="doc-field-head"><code>entreprise</code><span class="doc-tag doc-tag-req">requis</span></div><div class="doc-field-desc">Nom de l'entreprise · texte</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>poste</code><span class="doc-tag doc-tag-req">requis</span></div><div class="doc-field-desc">Intitulé du poste · texte</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>lieu</code></div><div class="doc-field-desc">Ville / lieu · texte</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>statut</code></div><div class="doc-field-desc">À postuler, Envoyée, Relancée, Entretien, Acceptée, Refusée, En réserve, Sans réponse</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>date_candidature</code><span class="doc-tag">date</span></div><div class="doc-field-desc">ISO <code>AAAA-MM-JJ</code></div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>date_reponse</code><span class="doc-tag">date</span></div><div class="doc-field-desc">Réponse de l'employeur</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>recruteur_nom</code> <code>recruteur_email</code></div><div class="doc-field-desc">Contact recruteur · texte</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>lien_offre</code><span class="doc-tag">URL</span></div><div class="doc-field-desc"><strong>http(s) uniquement</strong></div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>salaire</code> <code>type_contrat</code></div><div class="doc-field-desc">Texte libre (CDI, CDD, Stage…)</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>domaine</code></div><div class="doc-field-desc">Domaine métier · texte</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>plateforme</code></div><div class="doc-field-desc">Source (HelloWork, LinkedIn…)</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>tags</code><span class="doc-tag">liste</span></div><div class="doc-field-desc">Tags inconnus ajoutés à ta liste</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>notes</code><span class="doc-tag">liste</span></div><div class="doc-field-desc"><code>{ "label", "value" }</code></div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>relances</code><span class="doc-tag">liste</span></div><div class="doc-field-desc"><code>{ date, canal, note }</code> · canal : mail/telephone/linkedin/autre</div></div>
+            <div class="doc-field"><div class="doc-field-head"><code>cv_conserve</code> <code>cv_conserve_mois</code></div><div class="doc-field-desc">Conservation RGPD · booléen / entier</div></div>
+          </div>
+
+          <div class="doc-note doc-note-ok">
+            <span class="doc-note-ico">🔁</span>
+            <div><strong>Doublons gérés automatiquement</strong> — clé <em>entreprise + poste</em>
+              (insensible casse/accents). Une candidature existante est <strong>complétée</strong>
+              (seuls les champs vides, jamais d'écrasement ; étiquettes fusionnées). Réimporter le
+              même fichier ne crée <strong>aucun doublon</strong>.</div>
+          </div>
+
+          <div class="doc-note doc-note-warn">
+            <span class="doc-note-ico">🛡️</span>
+            <div><strong>Limites &amp; sécurité</strong> — 500 candidatures max par import, fichier ≤ 2 Mo ;
+              notes : titre ≤ 200, contenu ≤ 10 000 ; max 200 notes / 50 étiquettes par candidature.
+              Les URL non http(s) (<code>javascript:</code>, <code>data:</code>…) sont rejetées.
+              Un JSON invalide donne une erreur claire, sans rien écrire.</div>
+          </div>
+
+          <div class="doc-note doc-note-info">
+            <span class="doc-note-ico">🔌</span>
+            <div><strong>Compatibilité (pourquoi des « conversions »)</strong> — pour importer aussi
+              des fichiers venus d'ailleurs, l'import <em>tolère</em> en plus : les noms en
+              <strong>camelCase</strong> (<code>dateCandidature</code>, <code>nomRecruteur</code>…),
+              les dates en <strong>JJ/MM/AAAA</strong>, les statuts synonymes
+              (<code>Refus</code> → Refusée, <code>Candidature envoyée</code> → Envoyée, inconnu →
+              À postuler) et une date <code>dateRelance</code> seule = une relance effectuée.
+              <strong>Si tu maîtrises le fichier, utilise la structure ci-dessus</strong> et rien
+              n'est converti.</div>
+          </div>
+        </div>
+
+        <!-- Export -->
+        <div class="doc-block">
+          <div class="doc-block-title" style="--accent: var(--teal)"><span>📤</span> Exporter &amp; sauvegarder</div>
+          <p class="doc-p"><strong>Excel</strong> et <strong>PDF</strong> s'exportent depuis l'onglet
+            Candidatures. La <strong>Sauvegarde .zip</strong> (Paramètres) contient <em>tout</em>
+            — base, fichiers, export JSON et CSV — et n'est jamais filtrée.</p>
+
+          <h3 class="doc-h">Quel format choisir ?</h3>
+          <div class="doc-formats">
+            <div class="doc-format"><div class="doc-format-ico">📊</div><div class="doc-format-name">Excel</div><div class="doc-format-when">Analyser, trier, tableaux croisés. Le plus polyvalent en entreprise.</div></div>
+            <div class="doc-format"><div class="doc-format-ico">🧾</div><div class="doc-format-name">CSV</div><div class="doc-format-when">Réutiliser ailleurs / réimporter. Interopérable et léger.</div></div>
+            <div class="doc-format"><div class="doc-format-ico">🗄️</div><div class="doc-format-name">JSON</div><div class="doc-format-when">Sauvegarde fidèle, structure complète, réimport dans l'app.</div></div>
+            <div class="doc-format"><div class="doc-format-ico">📄</div><div class="doc-format-name">PDF</div><div class="doc-format-when">Partager en lecture seule : impression, e-mail.</div></div>
+            <div class="doc-format"><div class="doc-format-ico">🗂️</div><div class="doc-format-name">Sauvegarde .zip</div><div class="doc-format-when">Tout conserver : base de données + fichiers importés.</div></div>
+          </div>
+        </div>
       </section>
 
       <!-- Vue : Paramètres -->
