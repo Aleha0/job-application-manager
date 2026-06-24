@@ -377,6 +377,7 @@ function switchView(view) {
   if (view === 'settings') renderSettings();
   if (view === 'cvtheques') renderCvtheques();
   if (view === 'stats') renderStats();
+  if (view === 'rgpd') renderRgpd();
 }
 
 /* ===================================================================== */
@@ -1240,6 +1241,23 @@ async function candidatureModal(c = null) {
             </div>
           </div>
         </div>
+
+        <!-- Conservation des données (RGPD) -->
+        <div class="form-section">
+          <div class="form-section-title" style="--accent: var(--gray)">🔒 Conservation des données (RGPD)</div>
+          <div class="form-grid">
+            <div class="field full">
+              <label class="checkbox-line">
+                <input type="checkbox" name="cv_conserve" value="1" ${c.cv_conserve ? 'checked' : ''} />
+                L'employeur conserve mes données (CV, dossier…)
+              </label>
+            </div>
+            <div class="field">
+              <label>Durée de conservation <span class="hint">(en mois)</span></label>
+              <input class="input" type="number" min="0" step="1" name="cv_conserve_mois" value="${c.cv_conserve_mois != null ? c.cv_conserve_mois : ''}" placeholder="ex : 24" />
+            </div>
+          </div>
+        </div>
       </form>
 
       ${isEdit ? relancesSectionHTML(c) : ''}
@@ -1265,6 +1283,8 @@ async function candidatureModal(c = null) {
     if (!form.reportValidity()) return;
     const data = Object.fromEntries(new FormData(form).entries());
     data.tags = [...form.querySelectorAll('input[name="tag"]:checked')].map((i) => i.value);
+    // Case à cocher : toujours envoyer 0/1 (sinon décocher ne serait pas enregistré).
+    data.cv_conserve = form.querySelector('[name="cv_conserve"]')?.checked ? 1 : 0;
     try {
       if (isEdit) {
         await api(`/api/candidatures/${c.id}`, { method: 'PUT', body: data });
@@ -2631,6 +2651,130 @@ function setupStaticControls() {
 /*  Rafraîchissement global après modification                          */
 /* ===================================================================== */
 /* ===================================================================== */
+/*  Vue : Mes données personnelles (RGPD)                              */
+/* ===================================================================== */
+// Ajoute N mois à une date ISO (calcul UTC, sans dérive de fuseau).
+function addMonthsISO(iso, months) {
+  if (!iso || months == null) return null;
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00Z');
+  if (isNaN(d)) return null;
+  d.setUTCMonth(d.getUTCMonth() + Number(months));
+  return d.toISOString().slice(0, 10);
+}
+
+function rgpdTemplate(c) {
+  const poste = c.poste || '';
+  const dateCand = c.date_candidature ? fmtDate(c.date_candidature) : '';
+  return `Objet : Demande de suppression de mes données personnelles (RGPD)
+
+Madame, Monsieur,
+
+Conformément à l'article 17 du Règlement général sur la protection des données (RGPD, Union européenne) — droit à l'effacement, je vous demande de supprimer l'ensemble des données personnelles me concernant que vous détenez à la suite de ma candidature au poste de « ${poste} »${dateCand ? ` (candidature du ${dateCand})` : ''}.
+
+Je vous remercie de me confirmer la suppression effective de ces données.
+
+Cordialement,
+[Votre nom]`;
+}
+
+function rgpdMailto(c) {
+  const subject = 'Demande de suppression de mes données personnelles (RGPD)';
+  return `mailto:${encodeURIComponent(c.recruteur_email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(rgpdTemplate(c))}`;
+}
+
+function renderRgpd() {
+  const box = $('#rgpdContent');
+  if (!box) return;
+  const today = todayLocalISO();
+  const retained = State.candidatures.filter((c) => c.cv_conserve);
+
+  if (!retained.length) {
+    box.innerHTML = emptyState('🔒', 'Aucune conservation déclarée',
+      "Quand un employeur conserve tes données, coche « L'employeur conserve mes données » dans la fiche (section RGPD). Les imports remplissent ce champ automatiquement.");
+    return;
+  }
+
+  const rows = retained
+    .map((c) => {
+      const base = c.date_reponse || c.date_candidature || '';
+      const until = c.cv_conserve_mois != null && base ? addMonthsISO(base, c.cv_conserve_mois) : null;
+      const expired = until ? until < today : false;
+      return { c, until, expired };
+    })
+    .sort((a, b) => {
+      if (a.expired !== b.expired) return a.expired ? -1 : 1;
+      if (a.until && b.until) return a.until.localeCompare(b.until);
+      if (a.until) return -1;
+      if (b.until) return 1;
+      return 0;
+    });
+
+  const nbExpired = rows.filter((r) => r.expired).length;
+  const cards = rows
+    .map(({ c, until, expired }) => {
+      const contact = [c.recruteur_nom, c.recruteur_email].filter(Boolean).join(' · ') || 'Contact inconnu';
+      const dureeTxt = c.cv_conserve_mois != null ? `${c.cv_conserve_mois} mois` : 'durée inconnue';
+      const untilTxt = until ? `Conservé jusqu'au <strong>${fmtDate(until)}</strong>` : 'Échéance inconnue';
+      const badge = expired
+        ? `<span class="rgpd-badge rgpd-badge-exp">Conservation expirée</span>`
+        : until
+          ? `<span class="rgpd-badge rgpd-badge-ok">En cours</span>`
+          : `<span class="rgpd-badge">Inconnue</span>`;
+      return `
+        <div class="rgpd-card ${expired ? 'rgpd-expired' : ''}">
+          <div class="rgpd-card-head">
+            <div>
+              <div class="rgpd-ent">${esc(c.entreprise)}</div>
+              <div class="cell-sub">${esc(c.poste)}</div>
+            </div>
+            ${badge}
+          </div>
+          <div class="rgpd-meta">📅 ${untilTxt} <span class="cell-sub">(${esc(dureeTxt)})</span></div>
+          <div class="rgpd-meta">👤 ${esc(contact)}</div>
+          <div class="rgpd-actions">
+            ${c.recruteur_email ? `<a class="btn btn-sm btn-secondary" href="${rgpdMailto(c)}">✉️ Écrire</a>` : ''}
+            <button class="btn btn-sm btn-secondary" data-rgpd-template="${c.id}">📋 Modèle de demande</button>
+          </div>
+        </div>`;
+    })
+    .join('');
+
+  box.innerHTML = `
+    <div class="rgpd-summary">
+      <div class="rgpd-summary-top"><strong>${rows.length}</strong> organisme(s) conservent tes données${nbExpired ? ` · <span class="rgpd-exp-count">${nbExpired} expirée(s)</span>` : ''}</div>
+      <p class="muted">Dans l'<strong>Union européenne</strong>, tu peux demander la suppression à tout moment (RGPD, art. 17 — droit à l'effacement). Hors UE, adapte la demande à la loi locale sur la protection des données. Une conservation « expirée » devrait déjà avoir été effacée.</p>
+    </div>
+    <div class="rgpd-grid">${cards}</div>`;
+}
+
+function showRgpdTemplate(id) {
+  const c = State.candidatures.find((x) => x.id === id);
+  if (!c) return;
+  const tpl = rgpdTemplate(c);
+  openModal(`
+    <div class="modal-head"><h2>Demande de suppression — ${esc(c.entreprise)}</h2><button class="btn-icon" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <p class="muted">Modèle basé sur le <strong>RGPD européen</strong> (art. 17, droit à l'effacement) — hors UE, adapte la référence légale à ta juridiction. Copie-le et envoie-le ${c.recruteur_email ? `à <strong>${esc(c.recruteur_email)}</strong>` : "à l'employeur"}.</p>
+      <textarea class="input" id="rgpdTpl" rows="13" readonly>${esc(tpl)}</textarea>
+    </div>
+    <div class="modal-foot">
+      ${c.recruteur_email ? `<a class="btn btn-secondary" href="${rgpdMailto(c)}">✉️ Ouvrir dans l'email</a>` : ''}
+      <button class="btn btn-primary" id="btnCopyRgpd">📋 Copier</button>
+    </div>
+  `, { large: true });
+  $('#btnCopyRgpd')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(tpl);
+      toast('Modèle copié dans le presse-papiers');
+    } catch {
+      const t = $('#rgpdTpl');
+      if (t) { t.removeAttribute('readonly'); t.select(); document.execCommand('copy'); t.setAttribute('readonly', ''); }
+      toast('Modèle copié');
+    }
+  });
+}
+
+/* ===================================================================== */
 /*  Modale : Import de candidatures (JSON)                              */
 /* ===================================================================== */
 function importModal() {
@@ -2924,7 +3068,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit],[data-relance-done],[data-del-relance],[data-open-cvtheque],[data-del-cvtheque],[data-cvtheque-maj]');
+  const t = e.target.closest('[data-view],[data-action],[data-open-candidature],[data-del-candidature],[data-folder],[data-del-folder],[data-edit-doc],[data-del-doc],[data-open-note],[data-del-note],[data-link-note],[data-link-upload],[data-relance-edit],[data-relance-done],[data-del-relance],[data-open-cvtheque],[data-del-cvtheque],[data-cvtheque-maj],[data-rgpd-template]');
   if (!t) return;
 
   // Navigation
@@ -2967,6 +3111,10 @@ document.addEventListener('click', async (e) => {
   if (t.dataset.relanceEdit) {
     const c = State.candidatures.find((x) => x.id === Number(t.dataset.relanceEdit));
     if (c) candidatureModal(c);
+    return;
+  }
+  if (t.dataset.rgpdTemplate) {
+    showRgpdTemplate(Number(t.dataset.rgpdTemplate));
     return;
   }
   if (t.dataset.relanceDone) {

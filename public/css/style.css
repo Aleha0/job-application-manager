@@ -1481,6 +1481,48 @@ select.input option { background: var(--surface); color: var(--text); padding: 8
 .doc-format-when { font-size: 0.82rem; color: var(--text-soft); line-height: 1.45; }
 
 /* ===================================================================== */
+/*  Mes données personnelles (RGPD)                                      */
+/* ===================================================================== */
+.checkbox-line { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+.checkbox-line input { width: 16px; height: 16px; cursor: pointer; }
+
+.rgpd-summary {
+  background: var(--primary-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.rgpd-summary-top { font-size: 1.05rem; margin-bottom: 4px; }
+.rgpd-summary p { margin: 0; line-height: 1.5; }
+.rgpd-exp-count { color: var(--red); font-weight: 700; }
+.rgpd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.rgpd-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.rgpd-card.rgpd-expired { border-color: #f1b0b0; }
+.rgpd-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.rgpd-ent { font-weight: 700; }
+.rgpd-badge {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--gray-soft);
+  color: var(--gray);
+  white-space: nowrap;
+}
+.rgpd-badge-ok { background: var(--green-soft); color: var(--green); }
+.rgpd-badge-exp { background: var(--red-soft); color: var(--red); }
+.rgpd-meta { font-size: 0.85rem; color: var(--text-soft); margin-bottom: 6px; }
+.rgpd-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+/* ===================================================================== */
 /*  Export filtré (modale)                                               */
 /* ===================================================================== */
 .exp-section-title { font-size: 0.85rem; font-weight: 700; margin: 6px 0 10px; }

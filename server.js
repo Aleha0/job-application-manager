@@ -228,6 +228,14 @@ function enrichCandidature(c, delai, relancesArr) {
   return { ...c, tags: parseTags(c.tags), relances: rel, relance: computeRelance(c, delai, last) };
 }
 
+// Normalise les champs de conservation RGPD reçus du client.
+function parseCvConserve(v) {
+  return v === true || v === 1 || v === '1' || v === 'on' ? 1 : 0;
+}
+function parseCvConserveMois(v) {
+  return v != null && v !== '' && isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : null;
+}
+
 // =========================================================================
 //  API : CANDIDATURES
 // =========================================================================
@@ -256,10 +264,10 @@ app.post(
     const stmt = db.prepare(`
       INSERT INTO candidatures
         (entreprise, poste, lieu, statut, date_candidature, date_relance,
-         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, cv_document_id, domaine, tags)
+         recruteur_nom, recruteur_email, lien_offre, salaire, type_contrat, plateforme, date_reponse, cv_document_id, domaine, tags, cv_conserve, cv_conserve_mois)
       VALUES
         (@entreprise, @poste, @lieu, @statut, @date_candidature, @date_relance,
-         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @cv_document_id, @domaine, @tags)
+         @recruteur_nom, @recruteur_email, @lien_offre, @salaire, @type_contrat, @plateforme, @date_reponse, @cv_document_id, @domaine, @tags, @cv_conserve, @cv_conserve_mois)
     `);
     const info = stmt.run({
       entreprise: b.entreprise,
@@ -278,6 +286,8 @@ app.post(
       cv_document_id: b.cv_document_id ? Number(b.cv_document_id) : null,
       domaine: b.domaine || null,
       tags: normalizeTags(b.tags),
+      cv_conserve: parseCvConserve(b.cv_conserve),
+      cv_conserve_mois: parseCvConserveMois(b.cv_conserve_mois),
     });
     const row = db
       .prepare('SELECT * FROM candidatures WHERE id = ?')
@@ -312,6 +322,8 @@ app.put(
         cv_document_id = @cv_document_id,
         domaine = @domaine,
         tags = @tags,
+        cv_conserve = @cv_conserve,
+        cv_conserve_mois = @cv_conserve_mois,
         updated_at = datetime('now')
       WHERE id = @id
     `).run({
@@ -332,6 +344,8 @@ app.put(
       cv_document_id: b.cv_document_id !== undefined ? (b.cv_document_id ? Number(b.cv_document_id) : null) : existing.cv_document_id,
       domaine: b.domaine !== undefined ? (b.domaine || null) : existing.domaine,
       tags: b.tags !== undefined ? normalizeTags(b.tags) : existing.tags,
+      cv_conserve: b.cv_conserve !== undefined ? parseCvConserve(b.cv_conserve) : existing.cv_conserve,
+      cv_conserve_mois: b.cv_conserve_mois !== undefined ? parseCvConserveMois(b.cv_conserve_mois) : existing.cv_conserve_mois,
     });
     const row = db.prepare('SELECT * FROM candidatures WHERE id = ?').get(id);
     res.json(row);

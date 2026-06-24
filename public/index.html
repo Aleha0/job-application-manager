@@ -50,6 +50,9 @@
         <button class="nav-item" data-view="cvtheques">
           <span class="nav-ico">🗃️</span> Mes CVthèques
         </button>
+        <button class="nav-item" data-view="rgpd">
+          <span class="nav-ico">🔒</span> Mes données
+        </button>
         <button class="nav-item" data-view="docs">
           <span class="nav-ico">📖</span> Documentation
         </button>
@@ -185,6 +188,17 @@
           <button class="btn btn-primary" data-action="new-cvtheque">+ Ajouter une plateforme</button>
         </header>
         <div id="cvthequesList"></div>
+      </section>
+
+      <!-- Vue : Mes données (RGPD) -->
+      <section class="view hidden" id="view-rgpd">
+        <header class="view-header">
+          <div>
+            <h1>🔒 Mes données personnelles</h1>
+            <p class="muted">Qui conserve tes données, jusqu'à quand, et comment demander leur suppression</p>
+          </div>
+        </header>
+        <div id="rgpdContent"></div>
       </section>
 
       <!-- Vue : Documentation -->
