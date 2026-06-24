@@ -95,6 +95,12 @@ The key is **company + role** (`entreprise` + `poste`), case- and accent-insensi
 
 Re-importing the same file is safe and idempotent.
 
+The preview also **flags possible near-duplicates** (same company + a very similar role
+such as `H/F`↔`F/H`, or same company + same date) — both against existing applications
+and within the file. These are only **warnings**: the rows are still created (nothing is
+merged automatically), so you can check before confirming whether they are genuinely
+distinct applications.
+
 ### Limits & safety
 
 - Max **500** applications per import, file **≤ 2 MB**.

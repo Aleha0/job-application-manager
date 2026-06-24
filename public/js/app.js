@@ -2737,6 +2737,18 @@ function renderImportPreview(r) {
       ? `<details class="import-details"><summary>${completes.length} candidature(s) à compléter</summary><ul>${completes
           .map((d) => `<li>${esc(d.entreprise)} — ${esc(d.poste)} <span class="cell-sub">(${(d.champs || []).join(', ')})</span></li>`)
           .join('')}</ul></details>`
+      : ''}
+    ${r.possibleDuplicates && r.possibleDuplicates.length
+      ? `<div class="doc-note doc-note-warn" style="margin-top:12px">
+          <span class="doc-note-ico">⚠️</span>
+          <div><strong>${r.possibleDuplicates.length} doublon(s) possible(s) détecté(s)</strong> — ces candidatures
+            seront <strong>créées quand même</strong> (rien n'est fusionné automatiquement). Vérifie avant de confirmer
+            si ce sont de vraies candidatures distinctes ou des doublons.
+            <details class="import-details" style="margin-top:6px"><summary>Voir le détail</summary><ul>${r.possibleDuplicates
+              .map((d) => `<li>« ${esc(d.source)} » ressemble à « ${esc(d.match)} » <span class="cell-sub">(${esc(d.reason)} · ${d.where === 'fichier' ? 'dans le fichier' : 'déjà en base'})</span></li>`)
+              .join('')}</ul></details>
+          </div>
+        </div>`
       : ''}`;
 
   $('#btnImportAnalyze').classList.add('hidden');

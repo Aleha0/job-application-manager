@@ -621,14 +621,84 @@ const IMPORT_COMPLETABLE = [
   'lien_offre', 'salaire', 'type_contrat', 'plateforme', 'domaine',
 ];
 
+// Normalise un poste « en gros » : neutralise accents/casse, H/F<->F/H, tirets,
+// écriture inclusive ; garde les marqueurs distinctifs « (2e cand.) », « réf… ».
+function importFuzzyPoste(s) {
+  let x = normalizeStr(s);
+  x = x.replace(/[–—]/g, '-');
+  x = x.replace(/\b[hf]\s*[\/-]\s*[hfx]\b/g, '');
+  x = x.replace(/\.se\b/g, '').replace(/\(e\)/g, '');
+  x = x.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  return x;
+}
+
+// Détecte des quasi-doublons (sans fusionner). Pour les candidatures à CRÉER,
+// signale celles qui ressemblent à une candidature existante OU à une autre du
+// fichier : même entreprise + poste très similaire, ou même entreprise + date.
+function detectPossibleDuplicates(createdRows, existing) {
+  const fKey = (e, p) => normalizeStr(e) + '|' + importFuzzyPoste(p);
+  const dKey = (e, d) => normalizeStr(e) + '@' + d;
+  const eKey = (e, p) => normalizeStr(e) + '||' + normalizeStr(p);
+  const label = (x) => `${x.entreprise} — ${x.poste}`;
+
+  const exByFuzzy = new Map();
+  const exByDate = new Map();
+  for (const c of existing) {
+    const fk = fKey(c.entreprise, c.poste);
+    if (!exByFuzzy.has(fk)) exByFuzzy.set(fk, []);
+    exByFuzzy.get(fk).push(c);
+    if (c.date_candidature) {
+      const dk = dKey(c.entreprise, c.date_candidature);
+      if (!exByDate.has(dk)) exByDate.set(dk, []);
+      exByDate.get(dk).push(c);
+    }
+  }
+
+  const out = [];
+  const seen = new Set();
+  const add = (source, match, reason, where) => {
+    const k = source + '##' + match + '##' + where;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ source, match, reason, where });
+  };
+
+  for (const r of createdRows) {
+    const rE = eKey(r.entreprise, r.poste);
+    for (const c of exByFuzzy.get(fKey(r.entreprise, r.poste)) || []) {
+      if (eKey(c.entreprise, c.poste) !== rE) add(label(r), label(c), 'même entreprise, poste très similaire', 'existante');
+    }
+    if (r.date) {
+      for (const c of exByDate.get(dKey(r.entreprise, r.date)) || []) {
+        if (eKey(c.entreprise, c.poste) !== rE) add(label(r), label(c), 'même entreprise, même date', 'existante');
+      }
+    }
+  }
+
+  for (let i = 0; i < createdRows.length; i++) {
+    for (let j = i + 1; j < createdRows.length; j++) {
+      const a = createdRows[i], b = createdRows[j];
+      if (eKey(a.entreprise, a.poste) === eKey(b.entreprise, b.poste)) continue;
+      if (fKey(a.entreprise, a.poste) === fKey(b.entreprise, b.poste)) {
+        add(label(a), label(b), 'poste très similaire', 'fichier');
+      } else if (a.date && a.date === b.date && normalizeStr(a.entreprise) === normalizeStr(b.entreprise)) {
+        add(label(a), label(b), 'même entreprise, même date', 'fichier');
+      }
+    }
+  }
+  return out;
+}
+
 // Traite l'import : dry-run (commit=false) ou exécution (commit=true).
 function processImport(rows, commit) {
   const keyOf = (ent, pos) => normalizeStr(ent) + '||' + normalizeStr(pos);
+  const existing = db.prepare('SELECT * FROM candidatures').all();
   const byKey = new Map();
-  for (const c of db.prepare('SELECT * FROM candidatures').all()) byKey.set(keyOf(c.entreprise, c.poste), c);
+  for (const c of existing) byKey.set(keyOf(c.entreprise, c.poste), c);
 
   const out = { total: rows.length, toCreate: 0, toComplete: 0, identical: 0, errors: [], details: [] };
   const allTags = new Set();
+  const createdRows = []; // candidatures qui seront créées (pour détecter les quasi-doublons)
 
   const insCand = db.prepare(`
     INSERT INTO candidatures
@@ -657,6 +727,7 @@ function processImport(rows, commit) {
       if (!exist) {
         out.toCreate++;
         out.details.push({ action: 'create', entreprise: f.entreprise, poste: f.poste });
+        createdRows.push({ entreprise: f.entreprise, poste: f.poste, date: f.date_candidature || '' });
         if (commit) {
           const row = { ...f, date_candidature: f.date_candidature || todayISO(), tags: JSON.stringify(norm.tags) };
           const info = insCand.run(row);
@@ -704,6 +775,7 @@ function processImport(rows, commit) {
   else run();
 
   out.tagsToAdd = unknownTagsAmong(allTags);
+  out.possibleDuplicates = detectPossibleDuplicates(createdRows, existing);
   if (commit) out.tagsAdded = addUnknownTags(allTags);
   return out;
 }
