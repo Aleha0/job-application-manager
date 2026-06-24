@@ -1433,7 +1433,11 @@ app.get(
 
 // Échappe une cellule CSV (séparateur ;).
 function csvCell(v) {
-  const s = v == null ? '' : String(v);
+  let s = v == null ? '' : String(v);
+  // Anti-injection de formule : une cellule commençant par = + - @ (ou tab/CR)
+  // peut être exécutée comme formule par Excel/Sheets. On la neutralise avec une
+  // apostrophe de tête (la valeur reste lisible, mais n'est plus interprétée).
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
@@ -1533,15 +1537,54 @@ const EXPORT_COLS = [
   { header: 'Étiquettes', key: 'tags', width: 22 },
 ];
 
-function candidaturesForExport() {
-  const agg = relanceAgg();
+// Filtres d'export (depuis la query string) : statut, domaine, plateforme, plage de dates.
+function parseExportFilters(q) {
+  q = q || {};
+  return {
+    statut: q.statut ? String(q.statut) : '',
+    domaine: q.domaine ? String(q.domaine) : '',
+    plateforme: q.plateforme ? String(q.plateforme) : '',
+    from: isValidISODate(q.from) ? q.from : '',
+    to: isValidISODate(q.to) ? q.to : '',
+  };
+}
+function exportMatches(c, f) {
+  if (f.statut && c.statut !== f.statut) return false;
+  if (f.domaine && c.domaine !== f.domaine) return false;
+  if (f.plateforme && c.plateforme !== f.plateforme) return false;
+  const dc = c.date_candidature || '';
+  if (f.from && (!dc || dc < f.from)) return false;
+  if (f.to && (!dc || dc > f.to)) return false;
+  return true;
+}
+function candidaturesFiltered(query) {
+  const f = parseExportFilters(query);
   return db
     .prepare('SELECT * FROM candidatures ORDER BY date_candidature DESC, id DESC')
     .all()
-    .map((c) => {
-      const r = agg.get(c.id) || { count: 0, last: '' };
-      return { ...c, tags: parseTags(c.tags).join(', '), nb_relances: r.count, derniere_relance: r.last || '' };
-    });
+    .filter((c) => exportMatches(c, f));
+}
+
+// Lignes prêtes pour Excel/PDF/CSV (tags en texte, agrégats de relances).
+function candidaturesForExport(query) {
+  const agg = relanceAgg();
+  return candidaturesFiltered(query).map((c) => {
+    const r = agg.get(c.id) || { count: 0, last: '' };
+    return { ...c, tags: parseTags(c.tags).join(', '), nb_relances: r.count, derniere_relance: r.last || '' };
+  });
+}
+
+// Objets candidature au format JSON ré-importable (tags + relances en tableaux).
+function candidaturesForJson(query) {
+  const relMap = relancesMap();
+  return candidaturesFiltered(query).map((c) => {
+    const { id, cv_document_id, created_at, updated_at, ...rest } = c;
+    return {
+      ...rest,
+      tags: parseTags(c.tags),
+      relances: (relMap.get(c.id) || []).map((r) => ({ date: r.date, canal: r.canal, note: r.note })),
+    };
+  });
 }
 
 app.get('/api/export/excel', async (req, res) => {
@@ -1553,7 +1596,7 @@ app.get('/api/export/excel', async (req, res) => {
     ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF0FE' } };
     ws.autoFilter = { from: 'A1', to: { row: 1, column: EXPORT_COLS.length } };
     ws.views = [{ state: 'frozen', ySplit: 1 }];
-    for (const c of candidaturesForExport()) ws.addRow(c);
+    for (const c of candidaturesForExport(req.query)) ws.addRow(c);
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="candidatures-${todayISO()}.xlsx"`);
@@ -1567,7 +1610,7 @@ app.get('/api/export/excel', async (req, res) => {
 
 app.get('/api/export/pdf', (req, res) => {
   try {
-    const rows = candidaturesForExport();
+    const rows = candidaturesForExport(req.query);
     // Colonnes clés (largeurs de base, mises à l'échelle pour remplir la page).
     const cols = [
       { label: 'Entreprise', key: 'entreprise', w: 130 },
@@ -1691,6 +1734,34 @@ app.get('/api/export/pdf', (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: 'Erreur export PDF.' });
   }
 });
+
+// Export CSV (filtré), UTF-8 avec BOM pour Excel.
+app.get('/api/export/csv', asyncRoute((req, res) => {
+  const rows = candidaturesFiltered(req.query);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="candidatures-${todayISO()}.csv"`);
+  res.send('﻿' + buildCandidaturesCsv(rows));
+}));
+
+// Export JSON (filtré), structure ré-importable.
+app.get('/api/export/json', asyncRoute((req, res) => {
+  const data = candidaturesForJson(req.query);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="candidatures-${todayISO()}.json"`);
+  res.send(JSON.stringify({ app: pkg.name, exported_at: new Date().toISOString(), candidatures: data }, null, 2));
+}));
+
+// Aperçu d'export : nombre de candidatures correspondant aux filtres + échantillon.
+app.get('/api/export/preview', asyncRoute((req, res) => {
+  const rows = candidaturesFiltered(req.query);
+  res.json({
+    total: rows.length,
+    sample: rows.slice(0, 6).map((c) => ({
+      entreprise: c.entreprise, poste: c.poste, statut: c.statut,
+      date_candidature: c.date_candidature, domaine: c.domaine, plateforme: c.plateforme,
+    })),
+  });
+}));
 
 // =========================================================================
 //  API : EXTRACTION DEPUIS UNE OFFRE D'EMPLOI (lien ou texte)

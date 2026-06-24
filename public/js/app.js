@@ -2752,6 +2752,82 @@ function renderImportPreview(r) {
   }
 }
 
+/* ===================================================================== */
+/*  Modale : Export filtré                                              */
+/* ===================================================================== */
+function exportModal() {
+  const domaines = [...new Set(State.candidatures.map((c) => c.domaine).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const plateformes = [...new Set(State.candidatures.map((c) => c.plateforme).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const opt = (v, l, sel) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(l)}</option>`;
+  const typeBtn = (v, label, ico) => `<label class="exp-type"><input type="radio" name="exportType" value="${v}" ${v === 'excel' ? 'checked' : ''} hidden /><span class="exp-type-ico">${ico}</span>${label}</label>`;
+
+  openModal(`
+    <div class="modal-head"><h2>Exporter des candidatures</h2><button class="btn-icon" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div class="exp-section-title">Format</div>
+      <div class="exp-types">
+        ${typeBtn('excel', 'Excel', '📊')}${typeBtn('pdf', 'PDF', '📄')}${typeBtn('csv', 'CSV', '🧾')}${typeBtn('json', 'JSON', '🗄️')}
+      </div>
+      <div class="exp-section-title">Filtres <span class="hint">(combinables · laisse « Tous » pour ne pas filtrer)</span></div>
+      <div class="form-grid">
+        <div class="field"><label>Statut</label><select class="input" id="expStatut">${opt('', 'Tous', true)}${State.statuts.map((s) => opt(s, s)).join('')}</select></div>
+        <div class="field"><label>Domaine</label><select class="input" id="expDomaine">${opt('', 'Tous', true)}${domaines.map((d) => opt(d, d)).join('')}</select></div>
+        <div class="field"><label>Plateforme</label><select class="input" id="expPlateforme">${opt('', 'Toutes', true)}${plateformes.map((p) => opt(p, p)).join('')}</select></div>
+        <div class="field"><label>Date de candidature — du</label><input class="input" type="date" id="expFrom" /></div>
+        <div class="field"><label>… au</label><input class="input" type="date" id="expTo" /></div>
+      </div>
+      <div class="exp-preview">
+        <div class="exp-count" id="exportCount">…</div>
+        <div class="exp-sample" id="exportSample"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-primary" id="btnExportDownload">⬇ Télécharger</button>
+    </div>
+  `, { large: true });
+
+  ['expStatut', 'expDomaine', 'expPlateforme', 'expFrom', 'expTo'].forEach((id) =>
+    $('#' + id)?.addEventListener('change', updateExportPreview)
+  );
+  $$('input[name="exportType"]').forEach((r) =>
+    r.addEventListener('change', () => {
+      $$('.exp-type').forEach((el) => el.classList.remove('active'));
+      r.closest('.exp-type')?.classList.add('active');
+    })
+  );
+  document.querySelector('input[name="exportType"]:checked')?.closest('.exp-type')?.classList.add('active');
+  $('#btnExportDownload').addEventListener('click', () => {
+    const { type, qs } = exportQueryString();
+    window.location.href = `/api/export/${type}` + (qs ? '?' + qs : '');
+  });
+  updateExportPreview();
+}
+
+function exportQueryString() {
+  const p = new URLSearchParams();
+  const type = document.querySelector('input[name="exportType"]:checked')?.value || 'excel';
+  const map = { statut: '#expStatut', domaine: '#expDomaine', plateforme: '#expPlateforme', from: '#expFrom', to: '#expTo' };
+  for (const [k, sel] of Object.entries(map)) { const v = $(sel)?.value; if (v) p.set(k, v); }
+  return { type, qs: p.toString() };
+}
+
+async function updateExportPreview() {
+  const { qs } = exportQueryString();
+  const countEl = $('#exportCount'), sampleEl = $('#exportSample'), btn = $('#btnExportDownload');
+  try {
+    const r = await api('/api/export/preview' + (qs ? '?' + qs : ''));
+    if (countEl) countEl.textContent = `${r.total} candidature${r.total > 1 ? 's' : ''} correspondent aux filtres`;
+    if (sampleEl) sampleEl.innerHTML = r.total
+      ? r.sample.map((c) => `<div class="exp-row">${statutBadge(c.statut)} <strong>${esc(c.entreprise)}</strong> — ${esc(c.poste)} <span class="cell-sub">${fmtDate(c.date_candidature)}</span></div>`).join('')
+        + (r.total > r.sample.length ? `<div class="cell-sub" style="margin-top:6px">…et ${r.total - r.sample.length} autre(s)</div>` : '')
+      : `<div class="muted">Aucune candidature ne correspond à ces filtres.</div>`;
+    if (btn) btn.disabled = r.total === 0;
+  } catch {
+    if (countEl) countEl.textContent = '';
+  }
+}
+
 async function afterChange() {
   await Promise.all([refreshCandidatures(), refreshFolders()]);
   await renderFlash();
@@ -2851,6 +2927,7 @@ document.addEventListener('click', async (e) => {
     if (a === 'upload-doc') uploadModal();
     if (a === 'new-cvtheque') cvthequeModal();
     if (a === 'import-candidatures') importModal();
+    if (a === 'export-candidatures') exportModal();
     if (a === 'save-settings') saveSettings();
     return;
   }

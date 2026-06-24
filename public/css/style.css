@@ -1481,6 +1481,39 @@ select.input option { background: var(--surface); color: var(--text); padding: 8
 .doc-format-when { font-size: 0.82rem; color: var(--text-soft); line-height: 1.45; }
 
 /* ===================================================================== */
+/*  Export filtré (modale)                                               */
+/* ===================================================================== */
+.exp-section-title { font-size: 0.85rem; font-weight: 700; margin: 6px 0 10px; }
+.exp-section-title .hint { font-weight: 400; }
+.exp-types { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.exp-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.exp-type:hover { border-color: var(--primary); }
+.exp-type.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.exp-type-ico { font-size: 1.1rem; }
+.exp-preview {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 14px;
+}
+.exp-count { font-weight: 700; margin-bottom: 8px; }
+.exp-sample { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow: auto; }
+.exp-row { font-size: 0.86rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ===================================================================== */
 /*  Import de candidatures                                               */
 /* ===================================================================== */
 .import-summary {

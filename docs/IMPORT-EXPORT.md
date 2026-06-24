@@ -125,17 +125,28 @@ canonical structure above and nothing is converted.
 
 ## Exporting
 
-### Excel (`.xlsx`) and PDF
+### The export dialog (Applications tab → **⬇ Export**)
 
-From the **Applications** tab. The Excel sheet has one row per application with the
-columns:
+A single **Export** button opens a dialog where you pick:
 
-> Entreprise, Poste, Lieu, Statut, Type de contrat, Plateforme, Domaine, Salaire,
-> Date candidature, Date relance, Date réponse, Nb relances, Dernière relance,
-> Recruteur, Email recruteur, Lien de l'offre, Étiquettes.
+- **Format**: **Excel** (`.xlsx`), **PDF**, **CSV** or **JSON**.
+- **Filters** (combinable, optional): status, job field, platform, and a
+  **candidature date range** (from / to). Leave a filter on “All” to ignore it.
 
-PDF is a compact, read-only table (company, role, status, platform, field, location,
-date) — handy for printing or sharing.
+A **live preview** shows how many applications match and a short sample; the download
+button gives you exactly that subset, in the chosen format.
+
+**Format contents:**
+
+- **Excel** — one row per application, columns: Entreprise, Poste, Lieu, Statut, Type
+  de contrat, Plateforme, Domaine, Salaire, Date candidature, Date relance, Date
+  réponse, Nb relances, Dernière relance, Recruteur, Email recruteur, Lien de l'offre,
+  Étiquettes.
+- **CSV** — same columns (UTF-8, `;` separator), interoperable and lightweight.
+- **JSON** — the **canonical re-importable structure** (tags and follow-ups as arrays,
+  no internal id) — see *Importing* above.
+- **PDF** — a compact, read-only table (company, role, status, platform, field,
+  location, date), handy for printing or sharing.
 
 ### Full backup (`.zip`) — in Settings
 

@@ -114,8 +114,7 @@
             <p class="muted">Suivi détaillé de toutes tes candidatures</p>
           </div>
           <div class="header-actions">
-            <a class="btn btn-secondary" href="/api/export/excel" title="Exporter en Excel">⬇ Excel</a>
-            <a class="btn btn-secondary" href="/api/export/pdf" title="Exporter en PDF">⬇ PDF</a>
+            <button class="btn btn-secondary" data-action="export-candidatures" title="Exporter (Excel, PDF, CSV, JSON) avec filtres">⬇ Exporter</button>
             <button class="btn btn-secondary" data-action="import-candidatures" title="Importer des candidatures depuis un fichier JSON">⬆ Importer (JSON)</button>
             <button class="btn btn-primary" data-action="new-candidature">+ Nouvelle candidature</button>
           </div>
@@ -313,9 +312,13 @@
         <!-- Export -->
         <div class="doc-block">
           <div class="doc-block-title" style="--accent: var(--teal)"><span>📤</span> Exporter &amp; sauvegarder</div>
-          <p class="doc-p"><strong>Excel</strong> et <strong>PDF</strong> s'exportent depuis l'onglet
-            Candidatures. La <strong>Sauvegarde .zip</strong> (Paramètres) contient <em>tout</em>
-            — base, fichiers, export JSON et CSV — et n'est jamais filtrée.</p>
+          <p class="doc-p">Onglet Candidatures → bouton <strong>« ⬇ Exporter »</strong> : choisis le
+            <strong>format</strong> (Excel / PDF / CSV / JSON) puis des <strong>filtres combinables</strong>
+            (statut, domaine, plateforme, plage de dates). Un <strong>aperçu en direct</strong> indique
+            combien de candidatures correspondent avant de télécharger. Le <strong>JSON</strong> exporté
+            est directement <strong>ré-importable</strong>.</p>
+          <p class="doc-p">La <strong>Sauvegarde .zip</strong> (Paramètres) contient <em>tout</em>
+            — base, fichiers, export JSON et CSV — et n'est <strong>jamais</strong> filtrée.</p>
 
           <h3 class="doc-h">Quel format choisir ?</h3>
           <div class="doc-formats">
