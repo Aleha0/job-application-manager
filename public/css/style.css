@@ -1257,6 +1257,13 @@ select.input option { background: var(--surface); color: var(--text); padding: 8
 .fdrop-count { font-size: 0.75rem; color: var(--muted); }
 .fdrop-opt.selected .fdrop-count { color: var(--primary); }
 
+/* Panneau du filtre par date */
+.fdrop-menu-date { min-width: 240px; padding: 12px; }
+.fdate-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-soft); margin-bottom: 8px; }
+.fdate-row input { flex: 1; }
+.fdate-hint { font-size: 0.72rem; color: var(--muted); line-height: 1.35; margin: 2px 0 10px; }
+.fdate-actions { display: flex; justify-content: space-between; gap: 8px; }
+
 .active-filters {
   display: flex;
   flex-wrap: wrap;

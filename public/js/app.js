@@ -32,6 +32,8 @@ const State = {
   filterStatut: '',         // '' = tous, sinon un statut
   filterTag: '',            // '' = toutes, sinon une étiquette
   filterDomaine: '',        // '' = tous, sinon un domaine
+  filterDateFrom: '',       // '' ou date ISO (date de candidature >= )
+  filterDateTo: '',         // '' ou date ISO (date de candidature <= )
   sortBy: 'date',           // 'date' | 'activite' | 'relance'
   aiAvailable: false,       // IA d'extraction activée (clé API présente)
   view: 'dashboard',
@@ -764,6 +766,25 @@ function renderFilterControls() {
       ...tags.map((t) => ({ value: t, label: t, count: tagCounts[t] || 0 })),
     ]);
   }
+
+  // Filtre par date de candidature (calendrier natif, date précise ou plage).
+  const dateActive = !!(State.filterDateFrom || State.filterDateTo);
+  html += `
+    <div class="fdrop fdrop-date" data-fdrop="date">
+      <button type="button" class="fdrop-btn ${dateActive ? 'active' : ''}">
+        ${dateActive ? '<span class="fdrop-on"></span>' : ''}Date<span class="fdrop-caret">▾</span>
+      </button>
+      <div class="fdrop-menu fdrop-menu-date">
+        <label class="fdate-row">Du <input type="date" id="dateFrom" class="input" value="${esc(State.filterDateFrom)}" /></label>
+        <label class="fdate-row">Au <input type="date" id="dateTo" class="input" value="${esc(State.filterDateTo)}" /></label>
+        <div class="fdate-hint">Laisse un champ vide pour une borne ouverte ; mets la même date des deux côtés pour un jour précis.</div>
+        <div class="fdate-actions">
+          <button type="button" class="btn btn-sm btn-secondary" data-clear-filter="date">Effacer</button>
+          <button type="button" class="btn btn-sm btn-primary" data-apply-date>Appliquer</button>
+        </div>
+      </div>
+    </div>`;
+
   box.innerHTML = html;
 }
 
@@ -775,6 +796,19 @@ function renderActiveFilters() {
   if (State.filterStatut) pills.push(['statut', 'Statut', State.filterStatut]);
   if (State.filterDomaine) pills.push(['domaine', 'Domaine', State.filterDomaine]);
   if (State.filterTag) pills.push(['tag', 'Étiquette', State.filterTag]);
+  if (State.filterDateFrom || State.filterDateTo) {
+    let v;
+    if (State.filterDateFrom && State.filterDateTo) {
+      v = State.filterDateFrom === State.filterDateTo
+        ? `le ${fmtDate(State.filterDateFrom)}`
+        : `du ${fmtDate(State.filterDateFrom)} au ${fmtDate(State.filterDateTo)}`;
+    } else if (State.filterDateFrom) {
+      v = `depuis ${fmtDate(State.filterDateFrom)}`;
+    } else {
+      v = `jusqu'au ${fmtDate(State.filterDateTo)}`;
+    }
+    pills.push(['date', 'Date', v]);
+  }
   if (!pills.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
   box.innerHTML =
@@ -800,6 +834,11 @@ function candidatureMatchesFilters(c, skip) {
   if (skip !== 'statut' && State.filterStatut && c.statut !== State.filterStatut) return false;
   if (skip !== 'domaine' && State.filterDomaine && c.domaine !== State.filterDomaine) return false;
   if (skip !== 'tag' && State.filterTag && !(Array.isArray(c.tags) && c.tags.includes(State.filterTag))) return false;
+  if (skip !== 'date') {
+    const dc = c.date_candidature || '';
+    if (State.filterDateFrom && (!dc || dc < State.filterDateFrom)) return false;
+    if (State.filterDateTo && (!dc || dc > State.filterDateTo)) return false;
+  }
   return true;
 }
 
@@ -2751,6 +2790,18 @@ document.addEventListener('click', async (e) => {
     if (!wasOpen) drop.classList.add('open');
     return;
   }
+  // Applique le filtre par date (calendrier)
+  if (e.target.closest('[data-apply-date]')) {
+    State.filterDateFrom = $('#dateFrom')?.value || '';
+    State.filterDateTo = $('#dateTo')?.value || '';
+    // Si les bornes sont inversées, on les remet dans l'ordre.
+    if (State.filterDateFrom && State.filterDateTo && State.filterDateFrom > State.filterDateTo) {
+      [State.filterDateFrom, State.filterDateTo] = [State.filterDateTo, State.filterDateFrom];
+    }
+    document.querySelectorAll('.fdrop.open').forEach((x) => x.classList.remove('open'));
+    renderCandidatures();
+    return;
+  }
   // Choix d'une option de filtre
   const fopt = e.target.closest('.fdrop-opt');
   if (fopt) {
@@ -2766,10 +2817,13 @@ document.addEventListener('click', async (e) => {
   const clr = e.target.closest('[data-clear-filter]');
   if (clr) {
     const w = clr.dataset.clearFilter;
-    if (w === 'all') { State.filterStatut = ''; State.filterDomaine = ''; State.filterTag = ''; }
-    else if (w === 'statut') State.filterStatut = '';
+    if (w === 'all') {
+      State.filterStatut = ''; State.filterDomaine = ''; State.filterTag = '';
+      State.filterDateFrom = ''; State.filterDateTo = '';
+    } else if (w === 'statut') State.filterStatut = '';
     else if (w === 'domaine') State.filterDomaine = '';
     else if (w === 'tag') State.filterTag = '';
+    else if (w === 'date') { State.filterDateFrom = ''; State.filterDateTo = ''; }
     renderCandidatures();
     return;
   }
